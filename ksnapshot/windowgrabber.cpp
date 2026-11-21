@@ -185,6 +185,63 @@ QPixmap grabWindow( Window child, int x, int y, uint w, uint h, uint border )
     return pm;
 }
 
+QPixmap WindowGrabber::grabActive()
+{
+    Display *dpy = qt_xdisplay();
+    const Window rootWin = qt_xrootwin();
+    static Atom net_active_window = XInternAtom( dpy, "_NET_ACTIVE_WINDOW", False );
+    Window active = None;
+    Atom type;
+    int format;
+    unsigned long nitems, after;
+    unsigned char *prop = 0;
+    if ( XGetWindowProperty( dpy, rootWin, net_active_window, 0, 1, False, XA_WINDOW,
+        &type, &format, &nitems, &after, &prop ) == Success && prop != NULL ) {
+        if ( type == XA_WINDOW && format == 32 && nitems == 1 )
+            active = *reinterpret_cast<Window *>( prop );
+        XFree( prop );
+    }
+    if ( active == None || active == rootWin )
+        return QPixmap();
+
+    XGrabServer( dpy );
+    // up to the child of the root: the window manager's frame
+    Window w = active;
+    for ( ;; ) {
+        Window root, parent;
+        Window *children;
+        unsigned int nchildren;
+        if ( XQueryTree( dpy, w, &root, &parent, &children, &nchildren ) == 0 ) {
+            w = None;
+            break;
+        }
+        if ( children != NULL )
+            XFree( children );
+        if ( parent == root || parent == None )
+            break;
+        w = parent;
+    }
+
+    QPixmap pm;
+    Window root;
+    int x, y;
+    uint width, height, border, depth;
+    if ( w != None && XGetGeometry( dpy, w, &root, &x, &y, &width, &height, &border, &depth ) ) {
+        // the frame's outside, border included, cut to the screen
+        const QRect r = QRect( x, y, width + 2 * border, height + 2 * border )
+            & QRect( 0, 0, DisplayWidth( dpy, DefaultScreen( dpy ) ),
+                     DisplayHeight( dpy, DefaultScreen( dpy ) ) );
+        // grabWindow() applies the shape from the grab's top left: only
+        // for a frame whose top left is on the screen
+        if ( !r.isEmpty() && r.topLeft() == QPoint( x, y ) )
+            pm = grabWindow( w, r.x(), r.y(), r.width(), r.height(), border );
+        else if ( !r.isEmpty() )
+            pm = QPixmap::grabWindow( rootWin, r.x(), r.y(), r.width(), r.height() );
+    }
+    XUngrabServer( dpy );
+    return pm;
+}
+
 WindowGrabber::WindowGrabber()
 : QDialog( 0, 0, true, Qt::WStyle_Customize  | Qt::WStyle_NoBorder |
                        Qt::WStyle_StaysOnTop | Qt::WX11BypassWM ),

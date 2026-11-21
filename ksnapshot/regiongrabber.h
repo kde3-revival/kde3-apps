@@ -20,51 +20,56 @@
 #ifndef REGIONGRABBER_H
 #define REGIONGRABBER_H
 
-#include <qlabel.h>
 #include <qpixmap.h>
+#include <qwidget.h>
 
-class QTimer;
-
-class SizeTip : public QLabel
-{
-  public:
-    SizeTip( QWidget *parent, const char *name=0 );
-    ~SizeTip() {}
-
-  void setTip( const QRect &rect );
-  void positionTip( const QRect &rect );
-};
-
+/*
+ Lets the user drag out a rectangle over a frozen picture of the whole
+ desktop (all monitors), dimmed outside the selection; the region is cut
+ from that picture, so neither the overlay nor anything drawn on it is in
+ the result.  regionGrabbed() is emitted once: with the region, or with a
+ null pixmap when cancelled (Escape, right button, or no input grab).
+*/
 class RegionGrabber : public QWidget
 {
   Q_OBJECT
 
   public:
-    RegionGrabber();
+    // delay: ms to wait before grabbing the screen (time for the caller's
+    // own windows to disappear)
+    RegionGrabber( int delay = 200 );
     ~RegionGrabber();
 
   protected slots:
     void initGrabber();
-    void updateSizeTip();
+    void grabInput();
 
   signals:
     void regionGrabbed( const QPixmap & );
 
   protected:
+    void paintEvent( QPaintEvent *e );
     void mousePressEvent( QMouseEvent *e );
     void mouseReleaseEvent( QMouseEvent *e );
     void mouseMoveEvent( QMouseEvent *e );
     void keyPressEvent( QKeyEvent *e );
 
-    void drawRubber();
+  private:
+    QRect selection() const;
+    QRect decorationRect() const;
+    QRect labelRect( const QRect &sel ) const;
+    QRect hintRect() const;
+    void finish( const QPixmap &result );
 
     bool mouseDown;
-    QRect grabRect;
+    bool done;
+    int grabTries;
+    QPoint startPos;
+    QPoint endPos;
     QPixmap pixmap;
-
-    SizeTip *sizeTip;
-    QTimer *tipTimer;
+    QPixmap dimmed;
+    QString hint;
+    QRect hintScreen;
 };
 
 #endif // REGIONGRABBER_H
-

@@ -3,11 +3,13 @@ kde3_add_executable(ksnapshot
     ksnapshotiface.skel
     main.cpp
     ksnapshot.cpp
+    quickshot.cpp
     regiongrabber.cpp
     windowgrabber.cpp
     ksnapshotwidget.ui
   MOC
     ksnapshot.h
+    quickshot.h
     regiongrabber.h
     windowgrabber.h
   LINK

@@ -27,8 +27,10 @@
 #include <kcmdlineargs.h>
 #include <kaboutdata.h>
 #include <kiconloader.h>
+#include <kstartupinfo.h>
 
 #include "ksnapshot.h"
+#include "quickshot.h"
 
 static const char description[] =
 	I18N_NOOP("KDE Screenshot Utility");
@@ -37,6 +39,9 @@ static KCmdLineOptions options[] =
 {
     { "c", 0, 0 },
     { "current", I18N_NOOP("Captures the window under the mouse on startup (instead of the desktop)"), 0 },
+    { "region", I18N_NOOP("Without the window: select an area of the screen, save it in the Screenshots folder of the pictures folder and copy it to the clipboard"), 0 },
+    { "fullscreen", I18N_NOOP("Without the window: the same with all the screens"), 0 },
+    { "window", I18N_NOOP("Without the window: the same with the active window"), 0 },
     { 0, 0, 0 }
 };
 
@@ -58,6 +63,17 @@ int main(int argc, char **argv)
   KApplication app;
 
   KImageIO::registerFormats();
+
+  // the Print key and its friends: no dialog
+  if ( args->isSet( "region" ) || args->isSet( "fullscreen" ) || args->isSet( "window" ) ) {
+     QuickShot::Mode mode = args->isSet( "region" ) ? QuickShot::Region
+         : args->isSet( "window" ) ? QuickShot::ActiveWindow : QuickShot::FullScreen;
+     args->clear();
+     app.disableSessionManagement();
+     KStartupInfo::appStarted();
+     QuickShot shot( mode );
+     return app.exec();
+  }
 
   // Create top level window
   KSnapshot *toplevel;

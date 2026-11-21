@@ -35,6 +35,9 @@ public:
     ~WindowGrabber();
 
     static QPixmap grabCurrent( bool includeDecorations = true );
+    // the active window (_NET_ACTIVE_WINDOW) with its frame; a null
+    // pixmap when there is none
+    static QPixmap grabActive();
 
 signals:
     void windowGrabbed( const QPixmap & );
