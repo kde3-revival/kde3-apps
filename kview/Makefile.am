@@ -1,4 +1,4 @@
-SUBDIRS = kimageviewer . config kviewcanvas kviewviewer modules photobook
+SUBDIRS = kimageviewer . config kviewcanvas kviewviewer modules
 
 INCLUDES = -I$(top_srcdir)/kview $(all_includes)
 
