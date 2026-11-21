@@ -307,28 +307,28 @@ void DiskEntry::setMounted(bool nowMounted)
   emit mountedChanged();
 }
 
-void DiskEntry::setKBSize(int kb_size)
+void DiskEntry::setKBSize(KIO::filesize_t kb_size)
 {
   size=kb_size;
   emit kBSizeChanged();
 }
 
-void DiskEntry::setKBUsed(int kb_used)
+void DiskEntry::setKBUsed(KIO::filesize_t kb_used)
 {
   used=kb_used;
   if ( size < (used+avail) ) {  //adjust kBAvail
      kdWarning() << "device " << device << ": kBAvail(" << avail << ")+*kBUsed(" << used << ") exceeds kBSize(" << size << ")" << endl;
-     setKBAvail(size-used);
+     setKBAvail(size > used ? size-used : 0);
   }
   emit kBUsedChanged();
 }
 
-void DiskEntry::setKBAvail(int kb_avail)
+void DiskEntry::setKBAvail(KIO::filesize_t kb_avail)
 {
   avail=kb_avail;
   if ( size < (used+avail) ) {  //adjust kBUsed
      kdWarning() << "device " << device << ": *kBAvail(" << avail << ")+kBUsed(" << used << ") exceeds kBSize(" << size << ")" << endl;
-     setKBUsed(size-avail);
+     setKBUsed(size > avail ? size-avail : 0);
   }
   emit kBAvailChanged();
 }

@@ -79,11 +79,11 @@ class CListViewItem : public QListViewItem
  
     virtual int compare ( QListViewItem* i, int col, bool) const;
     	
-    void    setKeys ( int kb_size, int kb_avail, float percent_full ) ;
+    void    setKeys ( KIO::filesize_t kb_size, KIO::filesize_t kb_avail, float percent_full ) ;
 
   private:
-    int     size;
-    int     avail;
+    KIO::filesize_t size;
+    KIO::filesize_t avail;
     float   full;
 };
 

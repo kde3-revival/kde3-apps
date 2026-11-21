@@ -82,7 +82,7 @@ int CListViewItem::compare ( QListViewItem *i, int column, bool ) const
   }
 }
 
-void CListViewItem::setKeys (int kb_size, int kb_avail, float percent_full)
+void CListViewItem::setKeys (KIO::filesize_t kb_size, KIO::filesize_t kb_avail, float percent_full)
 {
   size  = kb_size;
   avail = kb_avail;

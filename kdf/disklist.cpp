@@ -320,17 +320,17 @@ void DiskList::dfDone()
       //kdDebug() << "    Icon:          [" << disk->iconName() << "]" << endl;
 
       u=s.left(s.find(BLANK));
-      disk->setKBSize(u.toInt() );
+      disk->setKBSize(strtoull(u.latin1(), 0, 10) );
       s=s.remove(0,s.find(BLANK)+1 );
       //kdDebug() << "    Size:       [" << disk->kBSize() << "]" << endl;
 
       u=s.left(s.find(BLANK));
-      disk->setKBUsed(u.toInt() );
+      disk->setKBUsed(strtoull(u.latin1(), 0, 10) );
       s=s.remove(0,s.find(BLANK)+1 );
       //kdDebug() << "    Used:       [" << disk->kBUsed() << "]" << endl;
 
       u=s.left(s.find(BLANK));
-      disk->setKBAvail(u.toInt() );
+      disk->setKBAvail(strtoull(u.latin1(), 0, 10) );
       s=s.remove(0,s.find(BLANK)+1 );
       //kdDebug() << "    Avail:       [" << disk->kBAvail() << "]" << endl;
 
