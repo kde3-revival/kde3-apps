@@ -24,7 +24,7 @@
 #include <qcolor.h>
 
 namespace Defaults {
-	static const bool smoothScaling = false;
+	static const bool smoothScaling = true;
 	static const bool keepAspectRatio = true;
 	static const bool centerImage = true;
 	static const QColor bgColor( Qt::black );
