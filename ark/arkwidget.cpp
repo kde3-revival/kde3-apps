@@ -2123,7 +2123,7 @@ ArkWidget::openArchive( const QString & _filename )
         if ( info->wasUnknownExtension() )
         {
             ArchiveFormatDlg * dlg = new ArchiveFormatDlg( this, info->findMimeType( m_url ) );
-            if ( !dlg->exec() == QDialog::Accepted )
+            if ( dlg->exec() == QDialog::Rejected )
             {
                 emit setWindowCaption( QString::null );
                 emit removeRecentURL( m_realURL );
