@@ -194,11 +194,10 @@ void KBufferColumn::recalcX()
   SpacingTrigger = noOfGroupedBytes() > 0 ? noOfGroupedBytes()-1 : LastPos+1; // last ensures to never trigger the spacing
 
   KPixelX NewWidth = 0;
-  int p = 0;
   int gs = 0;
   KPixelX *PX = PosX;
   KPixelX *PRX = PosRightX;
-  for( ; PX<&PosX[LastPos+1]; ++PX, ++PRX, ++p, ++gs )
+  for( ; PX<&PosX[LastPos+1]; ++PX, ++PRX, ++gs )
   {
     *PX = NewWidth;
     NewWidth += ByteWidth;

@@ -51,10 +51,9 @@ KBufferColTextExport::KBufferColTextExport( const KBufferColumn* BufferColumn, c
     SpacingTrigger = NoOfBytesPerLine; // ensures to never trigger the group spacing
 
   int N = 0;
-  int p = 0;
   int gs = 0;
   int *P = Pos;
-  for( ; P<&Pos[NoOfBytesPerLine]; ++P, ++p, ++gs )
+  for( ; P<&Pos[NoOfBytesPerLine]; ++P, ++gs )
   {
     *P = N;
     N += ByteWidth;

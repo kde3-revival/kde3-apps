@@ -37,7 +37,8 @@ KEditor::KEditor( KBufferCursor *BC, KHexEdit* HE, KController *P )
 
 bool KEditor::handleKeyPress( QKeyEvent *KeyEvent )
 {
-  bool clearUndoRedoInfo = true;
+  // only used by the disabled undo/redo code at the end
+  [[maybe_unused]] bool clearUndoRedoInfo = true;
   bool ShiftPressed =  KeyEvent->state() & Qt::ShiftButton;
   bool ControlPressed = KeyEvent->state() & Qt::ControlButton;
   bool AltPressed = KeyEvent->state() & Qt::AltButton;
