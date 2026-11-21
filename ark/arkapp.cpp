@@ -287,7 +287,7 @@ ArkApplication::isArkOpenAlready(const KURL & _arkname)
         realName = resolveFilename(_arkname.path());  // follow symlink
     else
         realName = _arkname.prettyURL();
-	return ( openArksList.findIndex(realName) != -1 );
+    return ( openArksList.findIndex(realName) != -1 );
 }
 
 #include "arkapp.moc"
