@@ -30,6 +30,8 @@ class KController
 {
   protected:
     KController( KHexEdit *HE, KController *P );
+  public:
+    virtual ~KController() {}
 
   public: // KController API
     virtual bool handleKeyPress( QKeyEvent *KeyEvent );
