@@ -130,7 +130,7 @@ void KViewCanvasConfig::defaults()
 	m_pWidget->m_pMaxHeight->setValue( Defaults::maxSize.height() );
 
 	QCheckListItem * item = m_items.first();
-	for( int i = 1; item; item = m_items.next(), ++i )
+	for( ; item; item = m_items.next() )
 		item->setOn( false );
 	emit changed( true );
 }
