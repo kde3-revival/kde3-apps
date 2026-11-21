@@ -1070,7 +1070,11 @@ CInsertDialog::CInsertDialog( QWidget *parent, const char *name, bool modal )
   :KDialogBase( Plain, i18n("Insert Pattern"), Ok|Cancel, Ok,
 		parent, name, modal )
 {
-  setButtonOKText(i18n("&Insert"));
+  // what the deprecated setButtonOKText(i18n("&Insert")) did
+  setButtonText( Ok, i18n("&Insert") );
+  setButtonTip( Ok, i18n("Accept settings") );
+  setButtonWhatsThis( Ok, i18n( "If you press the <b>OK</b> button, all changes\n"
+                                "you made will be used to proceed." ) );
 
   QString text;
   QVBoxLayout *topLayout = new QVBoxLayout( plainPage(), 0, spacingHint() );
