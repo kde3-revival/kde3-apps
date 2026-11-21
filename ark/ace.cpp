@@ -112,15 +112,15 @@ void AceArch::create()
 	                Arch::Extract | Arch::View );
 }
 
-void AceArch::addFile( const QStringList & urls )
+void AceArch::addFile( const QStringList & )
 {
 }
 
-void AceArch::addDir( const QString & dirName )
+void AceArch::addDir( const QString & )
 {
 }
 
-void AceArch::remove( QStringList *list )
+void AceArch::remove( QStringList * )
 {
 }
 
