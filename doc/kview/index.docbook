@@ -419,17 +419,6 @@ list.</action></para></listitem>
 <variablelist>
 
 <varlistentry>
-<term><menuchoice>
-<guimenu>Tools</guimenu>
-<guimenuitem>Scan Image...</guimenuitem>
-</menuchoice></term>
-<listitem><para><action>Opens</action> images from your scanner into &kview;.
-This menu item is only displayed in the menubar, if you choose the 
-application plugin scanner in &kview;s configure dialog
-</para></listitem>
-</varlistentry>
-
-<varlistentry>
 <term><menuchoice><shortcut><keycombo action="simul">
 &Shift;<keysym>Left Arrow</keysym></keycombo></shortcut>
 <guimenu>Tools</guimenu>
@@ -760,14 +749,6 @@ the menubar to give you access to them).</para>
 <term><guilabel>Presenter</guilabel></term>
 <listitem>
 <para>Creates an image list and enables you to create a slideshow.</para>
-</listitem>
-</varlistentry>
-
-<varlistentry>
-<term><guilabel>Scanner</guilabel></term>
-<listitem>
-<para>Adds <guimenu>Scan Image...</guimenu> to the <guimenu>Tools</guimenu>
-menu to open images from your scanner into &kview;.</para>
 </listitem>
 </varlistentry>
 </variablelist>

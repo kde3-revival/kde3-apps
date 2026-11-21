@@ -1,1 +1,1 @@
-SUBDIRS = scanner presenter browser effects
+SUBDIRS = presenter browser effects

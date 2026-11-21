@@ -3,7 +3,6 @@
 
 AUTOMAKE_OPTIONS = foreign 1.6.1
 
-# COMPILE_BEFORE_kooka = libkscan
 
 DISTCLEANFILES = inst-apps
 
