@@ -38,6 +38,8 @@
 
 #include <qcursor.h>
 #include <qdesktopwidget.h>
+#include <qdir.h>
+#include <qfileinfo.h>
 #include <qregexp.h>
 #include <qpainter.h>
 #include <qpaintdevicemetrics.h>
@@ -100,7 +102,13 @@ KSnapshot::KSnapshot(QWidget *parent, const char *name, bool grabCurrent)
     mainWidget->setDelay(conf->readNumEntry("delay",0));
     mainWidget->setMode( conf->readNumEntry( "mode", 0 ) );
     mainWidget->setIncludeDecorations(conf->readBoolEntry("includeDecorations",true));
-    filename = KURL::fromPathOrURL( conf->readPathEntry( "filename", QDir::currentDirPath()+"/"+i18n("snapshot")+"1.png" ));
+    // Until the first save: ~/Pictures if there is one, else the home
+    // folder (not the working directory, which is whatever the program
+    // that started KSnapshot had, e.g. for the Print key)
+    QString dir = QDir::homeDirPath() + "/Pictures";
+    if ( !QFileInfo( dir ).isDir() )
+	dir = QDir::homeDirPath();
+    filename = KURL::fromPathOrURL( conf->readPathEntry( "filename", dir+"/"+i18n("snapshot")+"1.png" ));
 
     // Make sure the name is not already being used
     while(KIO::NetAccess::exists( filename, false, this )) {
@@ -218,7 +226,9 @@ void KSnapshot::slotSave()
 void KSnapshot::slotSaveAs()
 {
     QStringList mimetypes = KImageIO::mimeTypes( KImageIO::Writing );
-    KFileDialog dlg( filename.url(), mimetypes.join(" "), this, "filedialog", true);
+    KFileDialog dlg( filename.url(), QString::null, this, "filedialog", true);
+    // offer PNG first: lossless, and what save() falls back to
+    dlg.setMimeFilter( mimetypes, "image/png" );
 
     dlg.setOperationMode( KFileDialog::Saving );
     dlg.setCaption( i18n("Save As") );
