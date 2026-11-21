@@ -204,7 +204,10 @@ or to grab a new one, by pressing the
 <guilabel>Full Screen</guilabel> combo box entry and then click on the 
 <guibutton>New Snapshot</guibutton> button.
 &ksnapshot; will now capture the entire desktop if you press
-<guibutton>New Snapshot</guibutton>.</para>
+<guibutton>New Snapshot</guibutton>.
+With several monitors, the entire desktop covers all of them; to capture
+only the monitor with the mouse cursor, select the
+<guilabel>Current Screen</guilabel> combo box entry instead.</para>
 
 <para>Similarly, to take a snapshot of a region, select the 
 <guilabel>Region</guilabel> combo box entry and set the 

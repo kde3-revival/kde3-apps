@@ -49,7 +49,9 @@ class KSnapshotIface : virtual public DCOPObject
         virtual void setURL(const QString &newURL) = 0;
 
         /** Set the ability to grab the entire screen, just the window
-                containing the mouse, or a region */
+                containing the mouse, or a region: 0 full screen (all
+                screens), 1 window under cursor, 2 region, 3 section of
+                window, 4 the screen with the mouse cursor */
         virtual void setGrabMode(int grab) = 0;
 
 	/** Return the current grab mode */

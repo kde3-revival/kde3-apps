@@ -37,6 +37,7 @@
 #include <kstartupinfo.h>
 
 #include <qcursor.h>
+#include <qdesktopwidget.h>
 #include <qregexp.h>
 #include <qpainter.h>
 #include <qpaintdevicemetrics.h>
@@ -452,6 +453,12 @@ void KSnapshot::performGrab()
 	}
     else if ( mainWidget->mode() == WindowUnderCursor ) {
 	snapshot = WindowGrabber::grabCurrent( mainWidget->includeDecorations() );
+    }
+    else if ( mainWidget->mode() == CurrentScreen ) {
+	// the screen (Xinerama/RandR monitor) with the mouse pointer
+	QDesktopWidget *desktop = QApplication::desktop();
+	QRect r = desktop->screenGeometry( desktop->screenNumber( QCursor::pos() ) );
+	snapshot = QPixmap::grabWindow( qt_xrootwin(), r.x(), r.y(), r.width(), r.height() );
     }
     else {
 	snapshot = QPixmap::grabWindow( qt_xrootwin() );
