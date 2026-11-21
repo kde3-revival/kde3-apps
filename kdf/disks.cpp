@@ -95,7 +95,7 @@ int DiskEntry::toggleMount()
 int DiskEntry::mount()
 {
   QString cmdS=mntcmd;
-  if (cmdS.isEmpty()) // generate default mount cmd
+  if (cmdS.isEmpty()) { // generate default mount cmd
     if (getuid()!=0 ) // user mountable
       {
       cmdS="mount %d";
@@ -106,6 +106,7 @@ int DiskEntry::mount()
       // the device and mountpoint.
       cmdS=QString::fromLatin1("mount -t%t -o%o %d %m");
       }
+  }
 
   cmdS.replace(QString::fromLatin1("%d"),deviceName());
   cmdS.replace(QString::fromLatin1("%m"),mountPoint());
