@@ -350,11 +350,13 @@ void KLineal::choseColor() {
   QRect r = KGlobalSettings::desktopGeometry(this);
 
   QPoint pos = QCursor::pos();
-  if (pos.x() + mColorSelector.width() > r.width()) {
-    pos.setX(r.width() - mColorSelector.width());
+  // r is the screen of the ruler, which need not start at 0,0 with
+  // several monitors
+  if (pos.x() + mColorSelector.width() > r.right() + 1) {
+    pos.setX(r.right() + 1 - mColorSelector.width());
   }
-  if (pos.y() + mColorSelector.height() > r.height()) {
-    pos.setY(r.height() - mColorSelector.height());
+  if (pos.y() + mColorSelector.height() > r.bottom() + 1) {
+    pos.setY(r.bottom() + 1 - mColorSelector.height());
   }
   mStoredColor = mColor;
   mColorSelector.move(pos);
