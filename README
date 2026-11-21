@@ -1,8 +1,7 @@
 In this file:
 
 * About kdegraphics
-* Common Mistakes
-* Debugging
+* Building
 * More Info
 
 
@@ -24,17 +23,18 @@ version keeps only:
     Picture viewer, provided as standalone program and embeddable KPart.
 
 
-Common Mistakes
----------------
-If configure claims Qt cannot be found, have a look at http://www.trolltech.com
-to get a copy of latest Qt 3.3.x version.
+Building
+--------
+kdegraphics builds with CMake against the CMake package of kdelibs
+(KDE3Libs), which also gives the install prefix:
 
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_PREFIX_PATH=/opt/kde3
+    cmake --build build
+    cmake --install build
 
-Debugging
----------
-You can use --enable-debug with the configure script, if you want to have
-debug code in your KDE apps and libs. This will ensure useful and more 
-verbose backtraces, but will require a lot more disk space. 
+Options: KDEGRAPHICS_WITH_XSHAPE (default ON) cuts shaped windows to
+their shape in KSnapshot; it needs the X Shape extension (libXext).
 
 
 More Info
