@@ -139,7 +139,7 @@ void CDragManager::timerEvent( QTimerEvent *e )
     if( mPending == true )
     {
       mPending = false;
-      emit startDrag( ( kapp->keyboardModifiers() & KApplication::ShiftModifier ) );
+      emit startDrag( ( KApplication::keyboardMouseState() & Qt::ShiftButton ) );
     }
   }
 }

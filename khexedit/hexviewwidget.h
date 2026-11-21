@@ -309,7 +309,7 @@ class CHexViewWidget : public QFrame
 
 inline bool CHexViewWidget::shiftButtonState( void )
 {
-  return kapp->keyboardModifiers() & KApplication::ShiftModifier;
+  return KApplication::keyboardMouseState() & Qt::ShiftButton;
 }
 
 
