@@ -25,6 +25,7 @@
 #include <kmimetype.h>
 #include <kstandarddirs.h>
 #include <kuniqueapplication.h>
+#include <kwin.h>
 
 #include <qfile.h>
 #include <qfileinfo.h>
@@ -37,8 +38,44 @@ class MyApp : public KUniqueApplication {
 		MyApp() : KUniqueApplication() { ref(); }
 		virtual ~MyApp() {}
 
-		virtual int newInstance() { return 0; }
+		virtual int newInstance();
 };
+
+// Called for the first instance and for every later start of
+// kwalletmanager while it runs (kwalletd starts it in the system tray
+// with --kwalletd, so the K menu entry always reaches the running one).
+int MyApp::newInstance() {
+	KWalletManager *wm = static_cast<KWalletManager*>(mainWidget());
+	if (!wm) {
+		return 0;
+	}
+
+	KCmdLineArgs *args = KCmdLineArgs::parsedArgs();
+
+	if (args->isSet("kwalletd")) {
+		wm->kwalletdLaunch();
+	}
+
+	// a start by the user (not by kwalletd) brings the window up
+	if (args->isSet("show") || (!args->isSet("kwalletd") && !isRestored())) {
+		wm->show();
+		KWin::forceActiveWindow(wm->winId());
+	}
+
+	for (int i = 0; i < args->count(); ++i) {
+		QString fn = QFileInfo(args->arg(i)).absFilePath();
+		KMimeType::Ptr ptr;
+		if (QFile::exists(fn) &&
+			(ptr = KMimeType::findByFileContent(fn)) &&
+			ptr->is("application/x-kde-wallet")) {
+			wm->openWalletFile(fn);
+		} else {
+			wm->openWallet(args->arg(i));
+		}
+	}
+	args->clear();
+	return 0;
+}
 
 int main(int argc, char **argv) {
 	static KCmdLineOptions options[] = {
@@ -73,28 +110,7 @@ int main(int argc, char **argv) {
 
 	KGlobal::dirs()->addResourceType("kwallet", "share/apps/kwallet");
 
-	KCmdLineArgs *args = KCmdLineArgs::parsedArgs();
-
-	if (args->isSet("show")) {
-		wm.show();
-	}
-
-	if (args->isSet("kwalletd")) {
-		wm.kwalletdLaunch();
-	}
-
-	for (int i = 0; i < args->count(); ++i) {
-		QString fn = QFileInfo(args->arg(i)).absFilePath();
-		KMimeType::Ptr ptr;
-		if (QFile::exists(fn) &&
-			(ptr = KMimeType::findByFileContent(fn)) &&
-			ptr->is("application/x-kde-wallet")) {
-			wm.openWalletFile(fn);
-		} else {
-			wm.openWallet(args->arg(i));
-		}
-	}
-	args->clear();
+	// the arguments are handled by newInstance()
 	return a.exec();
 }
 
