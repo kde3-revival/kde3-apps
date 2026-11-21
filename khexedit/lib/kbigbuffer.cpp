@@ -170,7 +170,7 @@ bool KBigBuffer::ensurePageLoaded( unsigned int PageIndex ) const
   if( NoOfFreePages < 1 )
   {
     // free the page which is the furthest away from the page we are loading
-    if( abs(FirstPage-PageIndex) > abs(LastPage-PageIndex) )
+    if( abs(FirstPage-(int)PageIndex) > abs(LastPage-(int)PageIndex) )
       while( !freePage(FirstPage++) );
     else
       while( !freePage(LastPage--) );
