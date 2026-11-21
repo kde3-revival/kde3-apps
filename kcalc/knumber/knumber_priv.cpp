@@ -343,7 +343,7 @@ int _knumfloat::sign(void) const
 
 
 
-#warning _cbrt for now this is a stupid work around
+// FIXME: _cbrt for now this is a stupid work around
 static void _cbrt(mpf_t &num)
 {
   double tmp_num = cbrt(mpf_get_d(num));
