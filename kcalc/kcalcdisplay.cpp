@@ -439,7 +439,7 @@ void KCalcDisplay::newCharacter(char const new_char)
 			if(_beep) KNotifyClient::beep();
 			return;
 		}
-		// no break
+		[[fallthrough]];
 	case '9':
 	case '8':
 		if (_num_base == NB_OCTAL)
@@ -447,7 +447,7 @@ void KCalcDisplay::newCharacter(char const new_char)
 			if(_beep) KNotifyClient::beep();
 			return;
 		}
-		// no break
+		[[fallthrough]];
 	case '7':
 	case '6':
 	case '5':
