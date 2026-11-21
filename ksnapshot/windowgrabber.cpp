@@ -244,7 +244,7 @@ void WindowGrabber::mousePressEvent( QMouseEvent *e )
 	yPos = e->globalY();
     else {
 	QPixmap pm;
-	if ( current ) {
+	if ( current >= 0 ) {
 	    QRect r( windows[ current ] );
 	    int w = r.width();
 	    int h = r.height();
