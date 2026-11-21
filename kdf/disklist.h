@@ -37,7 +37,8 @@
 
 #define DF_COMMAND    "df"
 // be pessimistic: df -T only works under linux !??
-#if defined(_OS_LINUX_)
+// (Q_OS_LINUX: Qt 3 never defined Qt 2's _OS_LINUX_)
+#if defined(Q_OS_LINUX)
 #define DF_ARGS       "-kT"
 #define NO_FS_TYPE    false
 #else
@@ -45,7 +46,7 @@
 #define NO_FS_TYPE    true
 #endif
 
-#ifdef _OS_SOLARIS_
+#ifdef Q_OS_SOLARIS
 #define CACHEFSTAB "/etc/cachefstab"
 #define FSTAB "/etc/vfstab"
 #else

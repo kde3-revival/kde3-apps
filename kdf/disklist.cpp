@@ -191,7 +191,7 @@ QFile f(FSTAB);
         disk->setDeviceName(expandEscapes(s.left(s.find(BLANK))));
             s=s.remove(0,s.find(BLANK)+1 );
 	    //  kdDebug() << "    deviceName:    [" << disk->deviceName() << "]" << endl;
-#ifdef _OS_SOLARIS_
+#ifdef Q_OS_SOLARIS
             //device to fsck
             s=s.remove(0,s.find(BLANK)+1 );
 #endif
@@ -447,13 +447,11 @@ void DiskList::replaceDeviceEntry(DiskEntry *disk)
     }// if fsType == "?" or "cachefs"
 
 
-#ifdef NO_FS_TYPE
-  if (pos != -1) {
+  if (NO_FS_TYPE && pos != -1) {
      DiskEntry * olddisk = disks->at(pos);
      if (olddisk)
         disk->setFsType(olddisk->fsType());
   }
-#endif
 
   if (pos != -1) {  // replace
       DiskEntry * olddisk = disks->at(pos);
