@@ -569,11 +569,11 @@ ArkWidget::addToArchive( const KURL::List & filesToAdd, const KURL & archive)
         {
             if ( !createArchive( archive.path() ) )
                  return false;
-            else
-            {
-                if ( !createArchive( tmpDir() + archive.fileName() ) )
-                     return false;
-            }
+        }
+        else
+        {
+            if ( !createArchive( tmpDir() + archive.fileName() ) )
+                 return false;
         }
     return true;
 
