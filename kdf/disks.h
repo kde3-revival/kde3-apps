@@ -124,6 +124,7 @@ private:
   void init();
   int sysCall(const QString & command);
   QString prettyPrint(int kBValue) const;
+  bool useUDisks() const;
 
   KShellProcess     *sysProc;
   QString           sysStringErrOut;

@@ -26,6 +26,7 @@
 
 #include <kglobal.h>
 #include <kdebug.h>
+#include <kstandarddirs.h>
 
 #include "disks.h"
 #include "disks.moc"
@@ -92,11 +93,30 @@ int DiskEntry::toggleMount()
       return umount();
 }
 
+/***************************************************************************
+  * udisks mounts removable and other non-fstab disks for normal users
+  * (polkit decides); fstab entries with user/users/owner keep using
+  * mount(8), which is set-uid for them
+**/
+bool DiskEntry::useUDisks() const
+{
+  if (getuid() == 0 || !deviceName().startsWith("/dev/"))
+    return false;
+  const QStringList opts = QStringList::split(',', mountOptions());
+  if (opts.contains("user") || opts.contains("users") || opts.contains("owner"))
+    return false;
+  return !KStandardDirs::findExe("udisksctl").isEmpty();
+}
+
 int DiskEntry::mount()
 {
   QString cmdS=mntcmd;
   if (cmdS.isEmpty()) { // generate default mount cmd
-    if (getuid()!=0 ) // user mountable
+    if (useUDisks())
+      {
+      cmdS="udisksctl mount -b %d";
+      }
+    else if (getuid()!=0 ) // user mountable
       {
       cmdS="mount %d";
       }
@@ -127,7 +147,7 @@ int DiskEntry::umount()
   kdDebug() << "umounting" << endl;
   QString cmdS=umntcmd;
   if (cmdS.isEmpty()) // generate default umount cmd
-      cmdS="umount %d";
+      cmdS = useUDisks() ? "udisksctl unmount -b %d" : "umount %d";
 
   cmdS.replace(QString::fromLatin1("%d"),KProcess::quote(deviceName()));
   cmdS.replace(QString::fromLatin1("%m"),KProcess::quote(mountPoint()));
