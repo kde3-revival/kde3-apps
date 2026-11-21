@@ -158,7 +158,13 @@ void TarArch::updateArch()
         flag = KProcess::Stdout;
       }
       if ( !getCompressor().isNull() )
-          *kp << getCompressor() << "-c" << tmpfile;
+      {
+          *kp << getCompressor() << "-c";
+          // zstd and lz4 report their progress and result on stderr
+          if ( getCompressor() == "zstd" || getCompressor() == "lz4" )
+              *kp << "-q";
+          *kp << tmpfile;
+      }
       else
           *kp << "cat" << tmpfile;
 
@@ -211,6 +217,15 @@ QString TarArch::getCompressor()
     if( m_fileMimeType == "application/x-tzo" )
         return QString( "lzop" );
 
+    if ( m_fileMimeType == "application/x-xz-compressed-tar" )
+        return QString( "xz" );
+
+    if ( m_fileMimeType == "application/x-zstd-compressed-tar" )
+        return QString( "zstd" );
+
+    if ( m_fileMimeType == "application/x-lz4-compressed-tar" )
+        return QString( "lz4" );
+
     return QString::null;
 }
 
@@ -229,7 +244,32 @@ QString TarArch::getUnCompressor()
     if( m_fileMimeType == "application/x-tzo" )
         return QString( "lzop" );
 
+    // like lzop, these decompress with -d: tar's --use-compress-program
+    // adds it itself, createTmp() does it for them
+    if ( m_fileMimeType == "application/x-xz-compressed-tar" )
+        return QString( "xz" );
+
+    if ( m_fileMimeType == "application/x-zstd-compressed-tar" )
+        return QString( "zstd" );
+
+    if ( m_fileMimeType == "application/x-lz4-compressed-tar" )
+        return QString( "lz4" );
+
     return QString::null;
+}
+
+bool TarArch::unCompressorNeedsD()
+{
+    const QString prog = getUnCompressor();
+    return prog == "lzop" || prog == "xz" || prog == "zstd" || prog == "lz4";
+}
+
+bool TarArch::listedByKTar()
+{
+    // KTar (KFilterDev) reads only gzip and bzip2 compressed tar files;
+    // the others are listed from the uncompressed temporary tar file.
+    return !compressed || m_fileMimeType == "application/x-tgz"
+           || m_fileMimeType == "application/x-tbz";
 }
 
 void
@@ -275,8 +315,7 @@ TarArch::open()
     // We list afterwards because we want the signals at the end
     // This unconfuses Extract Here somewhat
 
-    if ( m_fileMimeType == "application/x-tgz"
-            || m_fileMimeType == "application/x-tbz" || !compressed )
+    if ( listedByKTar() )
     {
         openFirstCreateTempDone();
     }
@@ -289,14 +328,13 @@ TarArch::open()
 
 void TarArch::openFirstCreateTempDone()
 {
-    if ( compressed && ( m_fileMimeType != "application/x-tgz" )
-            && ( m_fileMimeType != "application/x-tbz" ) )
+    if ( !listedByKTar() )
     {
         disconnect( this, SIGNAL( createTempDone() ), this, SLOT( openFirstCreateTempDone() ) );
     }
 
     Q_ASSERT( !m_listingThread );
-    m_listingThread = new TarListingThread( this, m_filename );
+    m_listingThread = new TarListingThread( this, listedByKTar() ? m_filename : tmpfile );
     m_listingThread->start();
 }
 
@@ -390,8 +428,11 @@ void TarArch::createTmp()
                 // - but it used to work without this ? ( Feb 13, 2003 )
                 kp->setUsePty( KProcess::Stdin, false );
                 flag = KProcess::Stdout;
-                *kp << "-d";
             }
+            if ( unCompressorNeedsD() )
+                *kp << "-d";
+            if ( strUncompressor == "zstd" || strUncompressor == "lz4" )
+                *kp << "-q";
             *kp << "-c" << m_filename;
 
             connect(kp, SIGNAL(processExited(KProcess *)),

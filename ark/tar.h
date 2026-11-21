@@ -46,10 +46,10 @@ class ArkWidget;
 class Arch;
 class TarListingThread;
 
-// TarArch can read Tar files and Tar files compressed with gzip.
-// It doesn't yet know how to list Tar files compressed with other
-// compressors because the listing part is done through KTar.
-// If it could be listed though, the rest would work.
+// TarArch can read Tar files and Tar files compressed with gzip, bzip2,
+// compress, lzop, xz, zstd and lz4.  The listing is done through KTar,
+// which reads gzip and bzip2 compressed files itself; the others are
+// listed from the uncompressed temporary tar file (see listedByKTar()).
 // The reason we use KTar for listing is that the output tar -tvf is
 // of unreliable format.
 
@@ -73,6 +73,8 @@ class TarArch : public Arch
 
 		QString getCompressor();
 		QString getUnCompressor();
+		bool unCompressorNeedsD();
+		bool listedByKTar();
 
 	public slots:
 		void updateProgress( KProcess *_kp, char *_buffer, int _bufflen );

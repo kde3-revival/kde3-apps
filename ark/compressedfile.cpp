@@ -135,6 +135,25 @@ void CompressedFile::initData()
         m_archiver_program   = "compress";
         m_defaultExtensions  = ".Z";
     }
+    // these decompress with -d (see open())
+    if ( mimeType == "application/x-xz" )
+    {
+        m_unarchiver_program = "xz";
+        m_archiver_program = "xz";
+        m_defaultExtensions << ".xz";
+    }
+    if ( mimeType == "application/zstd" )
+    {
+        m_unarchiver_program = "zstd";
+        m_archiver_program = "zstd";
+        m_defaultExtensions << ".zst";
+    }
+    if ( mimeType == "application/x-lz4" )
+    {
+        m_unarchiver_program = "lz4";
+        m_archiver_program = "lz4";
+        m_defaultExtensions << ".lz4";
+    }
 
 }
 
@@ -181,6 +200,12 @@ void CompressedFile::open()
     // lzop hack, see comment in tar.cpp createTmp()
     kp->setUsePty( KProcess::Stdin, false );
   }
+  if ( m_unarchiver_program == "xz" )
+    *kp << "-d";
+  // zstd and lz4 keep the compressed file unless told otherwise, but
+  // slotUncompressDone() expects the uncompressed file alone
+  if ( m_unarchiver_program == "zstd" || m_unarchiver_program == "lz4" )
+    *kp << "-d" << "-q" << "--rm";
   // gunzip 1.3 seems not to like original names with directories in them
   // testcase: https://listman.redhat.com/pipermail/valhalla-list/2006-October.txt.gz
   /*if ( m_unarchiver_program == "gunzip" )
@@ -293,7 +318,10 @@ void CompressedFile::addFile( const QStringList &urls )
 
   QString compressor = m_archiver_program;
 
-  *kp << compressor << "-c" << file;
+  *kp << compressor << "-c";
+  if ( compressor == "zstd" || compressor == "lz4" )
+    *kp << "-q";
+  *kp << file;
 
   connect( kp, SIGNAL(receivedStdout(KProcess*, char*, int)),
 	   this, SLOT(slotAddInProgress(KProcess*, char*, int)));

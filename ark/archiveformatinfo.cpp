@@ -28,6 +28,7 @@
 #include <kdebug.h>
 #include <kdesktopfile.h>
 #include <kfilterdev.h>
+#include <kstandarddirs.h>
 
 #include <qfile.h>
 
@@ -53,6 +54,9 @@ void ArchiveFormatInfo::buildFormatInfos()
   addFormatInfo( TAR_FORMAT, "application/x-tarz", ".tar.z" );
   addFormatInfo( TAR_FORMAT, "application/x-tbz", ".tar.bz2" );
   addFormatInfo( TAR_FORMAT, "application/x-tbz2", ".tar.bz2" );
+  addFormatInfo( TAR_FORMAT, "application/x-xz-compressed-tar", ".tar.xz" );
+  addFormatInfo( TAR_FORMAT, "application/x-zstd-compressed-tar", ".tar.zst" );
+  addFormatInfo( TAR_FORMAT, "application/x-lz4-compressed-tar", ".tar.lz4" );
   // x-tar as the last one to get its comment for all the others, too
   addFormatInfo( TAR_FORMAT, "application/x-tar", ".tar" );
 
@@ -67,6 +71,9 @@ void ArchiveFormatInfo::buildFormatInfos()
   addFormatInfo( COMPRESSED_FORMAT, "application/x-bzip2", ".bz2" );
   addFormatInfo( COMPRESSED_FORMAT, "application/x-lzop", ".lzo"  );
   addFormatInfo( COMPRESSED_FORMAT, "application/x-compress", ".Z" );
+  addFormatInfo( COMPRESSED_FORMAT, "application/x-xz", ".xz" );
+  addFormatInfo( COMPRESSED_FORMAT, "application/zstd", ".zst" );
+  addFormatInfo( COMPRESSED_FORMAT, "application/x-lz4", ".lz4" );
   find( COMPRESSED_FORMAT ).description = i18n( "Compressed File" );
 
   addFormatInfo( ZOO_FORMAT, "application/x-zoo", ".zoo" );
@@ -85,11 +92,17 @@ void ArchiveFormatInfo::buildFormatInfos()
 
 void ArchiveFormatInfo::addFormatInfo( ArchType type, QString mime, QString stdExt )
 {
+    // the mime types of xz, zstd and lz4 are new in kdelibs; without
+    // them the format would get an empty name and description
+    if ( locate( "mime", mime + ".desktop" ).isEmpty() )
+    {
+        kdWarning( 1601 ) << "MimeType " << mime << " seems to be missing." << endl;
+        return;
+    }
+
     FormatInfo & info = find( type );
 
     KDesktopFile * desktopFile = new KDesktopFile( mime + ".desktop", true, "mime" );
-    if( !desktopFile )
-        kdWarning( 1601 ) << "MimeType " << mime << " seems to be missing." << endl;
     KMimeType mimeType( desktopFile );
     info.mimeTypes.append( mimeType.name() );
     info.extensions += mimeType.patterns();
