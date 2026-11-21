@@ -41,6 +41,7 @@ class KSection : public KRange<int>
      */
     KSection( int SI, int W, bool );
     KSection();
+    KSection( const KSection &S ) = default;
     ~KSection();
 
   public:

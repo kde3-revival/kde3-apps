@@ -35,6 +35,7 @@ class KRange
   public:
     KRange( T S, T E ) : Start( S ), End( E )  {}
     KRange() : Start( null() ), End( null() )  {}
+    KRange( const KRange &R ) = default;
     ~KRange() {}
 
   public:

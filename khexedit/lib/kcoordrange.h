@@ -48,6 +48,7 @@ class KCoordRange : public KRange<KBufferCoord>
       */
     KCoordRange( KSection Pos, KSection Lines );
     KCoordRange();
+    KCoordRange( const KCoordRange &R ) = default;
     ~KCoordRange();
 
   public:
