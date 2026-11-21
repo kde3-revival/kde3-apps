@@ -182,10 +182,12 @@ void KImageHolder::mouseReleaseEvent( QMouseEvent * ev )
 		}
 	}
 	if( ev->state() & LeftButton || ev->state() & MidButton )
+	{
 		if( m_bSelecting )
 			m_bSelecting = false;
 		else
 			clearSelection();
+	}
 }
 
 void KImageHolder::drawSelect( QPainter & painter )
