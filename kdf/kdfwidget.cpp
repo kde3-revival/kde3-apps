@@ -324,11 +324,9 @@ void KDFWidget::updateDFDone( void ){
 
   mList->clear();
 
-  int i=0;
   CListViewItem *item = 0;
   for( DiskEntry *disk=mDiskList.first(); disk!=0; disk=mDiskList.next() )
   {
-    i++;
     QString size, percent;
     if( disk->kBSize() > 0 )
     {
@@ -566,8 +564,7 @@ void KDFWidget::updateDiskBarPixmaps( void )
     return;
   }
 
-  int i=0;
-  for(QListViewItem *it=mList->firstChild(); it!=0;it=it->nextSibling(),i++ )
+  for(QListViewItem *it=mList->firstChild(); it!=0;it=it->nextSibling() )
   {
     // I can't get find() to work. The Disks::compareItems(..) is
     // never called.
