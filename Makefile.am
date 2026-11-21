@@ -4,8 +4,6 @@
 AUTOMAKE_OPTIONS = foreign 1.6.1
 
 # COMPILE_BEFORE_kooka = libkscan
-# COMPILE_BEFORE_kfaxview = kfax
-# COMPILE_AFTER_kviewshell = kdvi kfaxview
 
 DISTCLEANFILES = inst-apps
 
