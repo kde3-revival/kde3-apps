@@ -44,12 +44,14 @@ class CStdOption
     int     updateFrequency( void );
     bool    popupIfFull( void );
     bool    openFileManager( void );
+    bool    showAllFileSystems( void );
 
     void setDefault( void );
     void setFileManager( const QString &fileManager );
     void setUpdateFrequency( int frequency );
     void setPopupIfFull( bool popupIfFull );
     void setOpenFileManager( bool openFileManagerOnMount );
+    void setShowAllFileSystems( bool showAll );
 
   private:
     static QString mDefaultFileManager;
@@ -58,6 +60,7 @@ class CStdOption
     int     mUpdateFrequency;
     bool    mPopupIfFull;
     bool    mOpenFileManagerOnMount;
+    bool    mShowAllFileSystems;
 };
 
 #endif

@@ -84,6 +84,7 @@ class KDFConfigWidget : public QWidget
     QLineEdit  *mFileManagerEdit;
     QCheckBox  *mOpenMountCheck;
     QCheckBox  *mPopupFullCheck;
+    QCheckBox  *mShowAllCheck;
     CStdOption mStd;
 
   signals:

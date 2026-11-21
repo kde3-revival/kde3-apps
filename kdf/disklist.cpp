@@ -32,6 +32,7 @@
 #include <qfileinfo.h>
 
 #include "disklist.h"
+#include "stdoption.h"
 
 #define BLANK ' '
 #define DELIMITER '#'
@@ -167,6 +168,41 @@ return rc;
 }
 
 /***************************************************************************
+  * the "Show pseudo file systems" option (KDFConfig/ShowAllFileSystems)
+**/
+bool DiskList::showAllFileSystems()
+{
+  KConfigGroupSaver saver(config, config->group());
+  CStdOption options;
+  options.updateConfiguration();
+  return options.showAllFileSystems();
+}
+
+/***************************************************************************
+  * file systems that are not disks: memory, kernel interfaces, container
+  * layers, snap images, FUSE helpers of the desktop
+**/
+bool DiskList::isPseudoFileSystem(const DiskEntry *disk)
+{
+  static const char * const types[] = {
+    "tmpfs", "devtmpfs", "ramfs", "efivarfs", "proc", "sysfs", "devpts",
+    "cgroup", "cgroup2", "pstore", "bpf", "debugfs", "tracefs",
+    "securityfs", "configfs", "fusectl", "mqueue", "hugetlbfs", "autofs",
+    "binfmt_misc", "rpc_pipefs", "nsfs", "overlay", "squashfs",
+    "fuse.portal", "fuse.gvfsd-fuse", "fuse.lxcfs", "fuse.snapfuse", 0
+  };
+  const QString type = disk->fsType();
+  for (int i = 0; types[i]; ++i)
+    if (type == types[i])
+      return true;
+
+  const QString mp = disk->mountPoint();
+  return mp.startsWith("/snap/") || mp.startsWith("/var/lib/snapd/")
+      || mp.startsWith("/var/lib/docker/") || mp.startsWith("/sys/")
+      || mp == "/sys" || mp.startsWith("/proc/") || mp == "/proc";
+}
+
+/***************************************************************************
   * UUID=, LABEL=, PARTUUID= and PARTLABEL= of fstab as the device node
   * df lists (through the udev links in /dev/disk); spec itself if there
   * is no such link (the device is not connected) or it is a plain name
@@ -212,6 +248,18 @@ int DiskList::readFSTAB()
 
   if (readingDFStdErrOut || dfProc->isRunning()) return -1;
 
+  const bool showAll = showAllFileSystems();
+  if (!showAll) {
+    // the option may have been switched off since the last update
+    for (DiskEntry *item = disks->first(); item; ) {
+      if (isPseudoFileSystem(item)) {
+        disks->remove(item);
+        item = disks->current();
+      } else
+        item = disks->next();
+    }
+  }
+
 QFile f(FSTAB);
   if ( f.open(IO_ReadOnly) ) {
     QTextStream t (&f);
@@ -251,7 +299,8 @@ QFile f(FSTAB);
 	      && (disk->mountPoint() != "/dev/swap")
 	      && (disk->mountPoint() != "/dev/pts")
 	      && (disk->mountPoint() != "/dev/shm")
-	      && (disk->mountPoint().find("/proc") == -1 ) )
+	      && (disk->mountPoint().find("/proc") == -1 )
+	      && (showAll || !isPseudoFileSystem(disk)) )
 	   replaceDeviceEntry(disk);
          else
            delete disk;
@@ -320,6 +369,7 @@ void DiskList::dfDone()
       return; //Don't touch the data for now..
 	  
   readingDFStdErrOut=TRUE;
+  const bool showAll = showAllFileSystems();
   for ( DiskEntry *disk=disks->first(); disk != 0; disk=disks->next() )
     disk->setMounted(FALSE);  // set all devs unmounted
 
@@ -386,7 +436,8 @@ void DiskList::dfDone()
 	   && (disk->mountPoint() != "/dev/swap")
 	   && (disk->mountPoint() != "/dev/pts")
 	   && (disk->mountPoint() != "/dev/shm")
-	   && (disk->mountPoint().find("/proc") == -1 ) ) {
+	   && (disk->mountPoint().find("/proc") == -1 )
+	   && (showAll || !isPseudoFileSystem(disk)) ) {
         disk->setMounted(TRUE);    // its now mounted (df lists only mounted)
 	replaceDeviceEntry(disk);
       } else

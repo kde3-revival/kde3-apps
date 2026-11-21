@@ -138,6 +138,12 @@ KDFConfigWidget::KDFConfigWidget(QWidget *parent, const char *name, bool init)
     Q_CHECK_PTR(mPopupFullCheck);
     topLayout->addWidget( mPopupFullCheck );
     connect(mPopupFullCheck,SIGNAL(toggled(bool)),this,SLOT(slotChanged()));
+
+    text = i18n("Show pseudo file systems (tmpfs, overlay, snap images, ...)");
+    mShowAllCheck = new QCheckBox( text, this );
+    Q_CHECK_PTR(mShowAllCheck);
+    topLayout->addWidget( mShowAllCheck );
+    connect(mShowAllCheck,SIGNAL(toggled(bool)),this,SLOT(slotChanged()));
   }
 
   loadSettings();
@@ -174,6 +180,7 @@ void KDFConfigWidget::applySettings( void )
     mStd.setUpdateFrequency( mScroll->value() );
     mStd.setPopupIfFull( mPopupFullCheck->isChecked() );
     mStd.setOpenFileManager( mOpenMountCheck->isChecked() );
+    mStd.setShowAllFileSystems( mShowAllCheck->isChecked() );
     mStd.writeConfiguration();
 
     QListViewItem *item = mList->firstChild();
@@ -206,6 +213,7 @@ void KDFConfigWidget::loadSettings( void )
     mLCD->display( mStd.updateFrequency() );
     mPopupFullCheck->setChecked( mStd.popupIfFull() );
     mOpenMountCheck->setChecked( mStd.openFileManager() );
+    mShowAllCheck->setChecked( mStd.showAllFileSystems() );
     mFileManagerEdit->setText( mStd.fileManager() );
 
     QListViewItem *item = mList->firstChild();
@@ -230,6 +238,7 @@ void KDFConfigWidget::defaultsBtnClicked( void )
   mLCD->display( mStd.updateFrequency() );
   mPopupFullCheck->setChecked( mStd.popupIfFull() );
   mOpenMountCheck->setChecked( mStd.openFileManager() );
+  mShowAllCheck->setChecked( mStd.showAllFileSystems() );
   mFileManagerEdit->setText( mStd.fileManager() );
 
   QListViewItem *item = mList->firstChild();

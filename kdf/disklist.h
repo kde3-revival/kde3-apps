@@ -124,6 +124,8 @@ private slots:
 
 private:
   void replaceDeviceEntry(DiskEntry *disk);
+  bool showAllFileSystems();
+  static bool isPseudoFileSystem(const DiskEntry *disk);
   static QString resolveFstabDevice(const QString &spec);
 
   Disks            *disks;

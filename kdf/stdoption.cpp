@@ -57,6 +57,8 @@ void CStdOption::updateConfiguration( void )
     "PopupIfFull", true );
   mOpenFileManagerOnMount = config.readBoolEntry( 
     "OpenFileMgrOnMount", false );
+  mShowAllFileSystems = config.readBoolEntry(
+    "ShowAllFileSystems", false );
 }
 
 
@@ -68,6 +70,7 @@ void CStdOption::writeConfiguration( void )
   config.writePathEntry( "FileManagerCommand", mFileManager );
   config.writeEntry( "PopupIfFull", mPopupIfFull );
   config.writeEntry( "OpenFileMgrOnMount", mOpenFileManagerOnMount );
+  config.writeEntry( "ShowAllFileSystems", mShowAllFileSystems );
   config.sync();
 }  
 
@@ -112,6 +115,17 @@ void CStdOption::setDefault( void )
   mUpdateFrequency = mDefaultUpdateFrequency;
   mPopupIfFull     = true;
   mOpenFileManagerOnMount = false;
+  mShowAllFileSystems = false;
+}
+
+bool CStdOption::showAllFileSystems( void )
+{
+  return( mShowAllFileSystems );
+}
+
+void CStdOption::setShowAllFileSystems( bool showAll )
+{
+  mShowAllFileSystems = showAll;
 }
 
 
