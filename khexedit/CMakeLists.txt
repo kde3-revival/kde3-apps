@@ -1,0 +1,62 @@
+add_subdirectory(pics)
+add_subdirectory(lib)
+add_subdirectory(parts)
+
+kde3_add_executable(khexedit
+  SOURCES
+    main.cc
+    toplevel.cc
+    hexmanagerwidget.cc
+    hexeditorwidget.cc
+    hextoolwidget.cc
+    hexviewwidget.cc
+    hexbuffer.cc
+    conversion.cc
+    dialog.cc
+    hexvalidator.cc
+    hexclipboard.cc
+    optiondialog.cc
+    printdialogpage.cc
+    statusbarprogress.cc
+    hexprinter.cc
+    hexerror.cc
+    draglabel.cc
+    stringdialog.cc
+    bitswapwidget.cc
+    chartabledialog.cc
+    hexdrag.cc
+    exportdialog.cc
+    fileinfodialog.cc
+    converterdialog.cc
+    listview.cc
+    searchbar.cc
+  MOC
+    bitswapwidget.h
+    chartabledialog.h
+    converterdialog.h
+    dialog.h
+    draglabel.h
+    exportdialog.h
+    fileinfodialog.h
+    hexdrag.h
+    hexeditorwidget.h
+    hexmanagerwidget.h
+    hextoolwidget.h
+    hexvalidator.h
+    hexviewwidget.h
+    listview.h
+    optiondialog.h
+    printdialogpage.h
+    searchbar.h
+    statusbarprogress.h
+    stringdialog.h
+    toplevel.h
+  LINK
+    KDE3::kio
+    KDE3::kdeprint
+)
+
+kde3_install_icons(khexedit)
+
+install(FILES khexedit.desktop DESTINATION ${KDE3_XDG_APPS_INSTALL_DIR})
+install(FILES khexeditui.rc DESTINATION ${KDE3_DATA_INSTALL_DIR}/khexedit)
