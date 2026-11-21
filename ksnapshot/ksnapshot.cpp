@@ -145,7 +145,7 @@ KSnapshot::~KSnapshot()
 {
 }
 
-void KSnapshot::resizeEvent( QResizeEvent *event)
+void KSnapshot::resizeEvent( QResizeEvent *)
 {
 	if( !updateTimer.isActive() )
 		updateTimer.start(200, true);
