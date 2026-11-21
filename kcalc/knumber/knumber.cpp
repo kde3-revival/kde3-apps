@@ -384,7 +384,7 @@ QString const KNumber::toQString(int width, int prec) const
       } else
 	tmp_str = QString(_num->ascii());
 
-      if (width > 0  &&  tmp_str.length() > width) {
+      if (width > 0  &&  tmp_str.length() > static_cast<uint>(width)) {
 	//result needs to be cut-off
 	bool tmp_bool = _fraction_input; // stupid work-around
 	_fraction_input = false;
