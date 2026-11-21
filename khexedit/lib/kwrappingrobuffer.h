@@ -48,6 +48,8 @@ class KWrappingROBuffer : public KReadOnlyBuffer
     virtual int insert( int Pos, const char*, int Length );
     virtual int remove( KSection S );
     virtual unsigned int replace( KSection S, const char*, unsigned int Length );
+    // does not override KDataBuffer::fill( char, int, unsigned int ), which stays visible
+    using KReadOnlyBuffer::fill;
     virtual int fill( const char FillChar, int, int );
     virtual void setDatum( unsigned int Offset, const char Char );
 
