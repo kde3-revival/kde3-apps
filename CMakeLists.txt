@@ -21,3 +21,4 @@ add_compile_definitions(HAVE_CONFIG_H)
 
 # -I$(top_builddir) of every Makefile: config.h
 include_directories("${PROJECT_BINARY_DIR}")
+add_subdirectory(kruler)
