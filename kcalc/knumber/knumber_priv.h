@@ -79,6 +79,8 @@ class _knumerror : public _knumber
   
   _knumerror(_knumber const & num);
 
+  _knumerror(_knumerror const & num) = default;
+
   _knumerror(const QString & num);
 
   //virtual ~_knumerror() { }
