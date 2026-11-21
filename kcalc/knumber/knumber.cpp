@@ -687,7 +687,7 @@ KNumber::operator double(void) const
   return static_cast<double>(*_num);
 }
 
-int const KNumber::compare(KNumber const & arg2) const
+int KNumber::compare(KNumber const & arg2) const
 {
   return _num->compare(*arg2._num);
 }
