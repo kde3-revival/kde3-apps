@@ -3039,7 +3039,6 @@ uint CHexBuffer::numPage( CHexPrinter &printer )
   QPainter paint( &printer );
   paint.setFont( font() );
 
-  SPageMargin margin = printer.pageMargin();
   SPageSize size = printer.pageUsableSize();
   int headHeight, footHeight, headMargin, footMargin, freeHeight;
 
