@@ -1,11 +1,13 @@
 /** @mainpage KDE Utilities
 *
-* The KDE Utilities SVN module collects together an enormous amount
-* of small shoddy utilities of dubious value that fall under the
-* 'desk utilities' category and that you would normally get for
-* free in a box of cereal. These include:
+* The KDE Utilities module collects small desk utilities:
 *
-* - kfloppy, a floppy disk formatter
-* - superkaramba, a form of eyecandy
+* - ark, an archive manager
+* - kcalc, a scientific calculator
+* - kcharselect, a character selector
+* - kdf, a free disk space viewer
+* - khexedit, a binary file editor
+* - ktimer, a countdown launcher
+* - kwalletmanager, the KWallet manager
 *
 */
