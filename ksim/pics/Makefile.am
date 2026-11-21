@@ -1,2 +1,0 @@
-SUBDIRS = misc
-KDE_ICON = AUTO
