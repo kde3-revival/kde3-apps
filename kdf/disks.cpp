@@ -108,10 +108,12 @@ int DiskEntry::mount()
       }
   }
 
-  cmdS.replace(QString::fromLatin1("%d"),deviceName());
-  cmdS.replace(QString::fromLatin1("%m"),mountPoint());
-  cmdS.replace(QString::fromLatin1("%t"),fsType());
-  cmdS.replace(QString::fromLatin1("%o"),mountOptions());
+  // the command runs through /bin/sh: quote the values, a mount point
+  // may come from the label of a removable disk
+  cmdS.replace(QString::fromLatin1("%d"),KProcess::quote(deviceName()));
+  cmdS.replace(QString::fromLatin1("%m"),KProcess::quote(mountPoint()));
+  cmdS.replace(QString::fromLatin1("%t"),KProcess::quote(fsType()));
+  cmdS.replace(QString::fromLatin1("%o"),KProcess::quote(mountOptions()));
 
   kdDebug() << "mount-cmd: [" << cmdS << "]" << endl;
   int e=sysCall(cmdS);
@@ -127,8 +129,8 @@ int DiskEntry::umount()
   if (cmdS.isEmpty()) // generate default umount cmd
       cmdS="umount %d";
 
-  cmdS.replace(QString::fromLatin1("%d"),deviceName());
-  cmdS.replace(QString::fromLatin1("%m"),mountPoint());
+  cmdS.replace(QString::fromLatin1("%d"),KProcess::quote(deviceName()));
+  cmdS.replace(QString::fromLatin1("%m"),KProcess::quote(mountPoint()));
 
   kdDebug() << "umount-cmd: [" << cmdS << "]" << endl;
   int e=sysCall(cmdS);
