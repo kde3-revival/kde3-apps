@@ -51,6 +51,7 @@
 #include <qvaluelist.h>
 #include <qtimer.h>
 #include <qdockarea.h>
+#include <qdesktopwidget.h>
 
 #include <assert.h>
 #include <kplugininfo.h>
@@ -593,7 +594,7 @@ void KView::fitWindowToImage()
 		return;
 
 	QSize winsize = sizeForCentralWidgetSize( imagesize );
-	QRect workarea = m_pWinModule->workArea();
+	QRect workarea = workArea();
 
 	QScrollBar * sb = new QScrollBar( Qt::Horizontal, this );
 	int scrollbarwidth = sb->height();
@@ -669,9 +670,20 @@ QSize KView::barSize( int mainwinwidth, BarSizeFrom from )
 	return QSize( width, height );
 }
 
+// The work area (the desktop without the panels) on the screen of the
+// window: with several monitors, KWinModule::workArea() spans all of them,
+// and a window fitted to it would stretch across the monitors.
+QRect KView::workArea()
+{
+	QDesktopWidget * desktop = QApplication::desktop();
+	QRect screen = desktop->screenGeometry( desktop->screenNumber( this ) );
+	QRect workarea = m_pWinModule->workArea().intersect( screen );
+	return workarea.isEmpty() ? screen : workarea;
+}
+
 QSize KView::maxCanvasSize()
 {
-	QSize workarea = m_pWinModule->workArea().size();
+	QSize workarea = workArea().size();
 	QSize framesize = frameSize() - size();
 	QSize maxcanvassize = workarea - framesize - barSize( workarea.width() - framesize.width(), FromWidgetSize );
 	kdDebug( 4600 ) << "maxcanvassize = " << maxcanvassize.width() << "x" << maxcanvassize.height() << endl;

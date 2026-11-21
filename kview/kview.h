@@ -98,6 +98,7 @@ class KView : public KParts::MainWindow
 		void fitWindowToImage();
 		QSize barSize( int, BarSizeFrom );
 		QSize maxCanvasSize();
+		QRect workArea();
 
 		KImageViewer::Viewer * m_pViewer;
 		KImageViewer::Canvas * m_pCanvas;
