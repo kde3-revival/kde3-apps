@@ -179,6 +179,7 @@ bool KViewPresenter::eventFilter( QObject *obj, QEvent *ev )
 					return true;
 				}
 			}
+				[[fallthrough]];
 			case QEvent::Drop:
 			{
 				// drop event in the image list
