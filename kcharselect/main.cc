@@ -12,6 +12,8 @@
 #include <kaboutdata.h>
 #include <kglobalsettings.h>
 
+static const char *version = "v1.1"; 
+
 static const char description[] = 
 	I18N_NOOP("KDE character selection utility");
 
