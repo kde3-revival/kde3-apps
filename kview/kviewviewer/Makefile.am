@@ -1,4 +1,4 @@
-SUBDIRS = test config
+SUBDIRS = config
 
 kde_module_LTLIBRARIES = libkviewviewer.la
 INCLUDES = -I$(top_srcdir)/kview $(all_includes)

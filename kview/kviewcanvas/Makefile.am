@@ -1,4 +1,4 @@
-SUBDIRS = config test
+SUBDIRS = config
 
 kde_module_LTLIBRARIES = libkviewcanvas.la
 INCLUDES = -I$(top_srcdir)/kview $(all_includes)

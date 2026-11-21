@@ -17,7 +17,7 @@ starting the KView application.
 
 The parent that is passed on to your plugin will be a KImageViewer::Viewer
 interface (which is also a KParts::ReadWritePart) if you make it a KViewViewer
-plugin, else you'll be passed a pointer to KView (take a look at the template
+plugin, else you'll be passed a pointer to KView (take a look at the effects
 plugin to see how to get to the KImageViewer::Viewer interface).
 
 
