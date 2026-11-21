@@ -34,8 +34,11 @@
 #include <netwm.h>
 
 // X11 headers last: their macros clash with Qt's names
+#include <X11/Xatom.h>
 #include "regiongrabber.h"
 #include "windowgrabber.h"
+
+extern Time qt_x_time;
 
 #include <stdlib.h>
 
@@ -81,10 +84,24 @@ static QString xdgUserDir( const char *name, const QString &fallback )
     return QDir::cleanDirPath( dir );
 }
 
+// the X server's current time: from a property change on a window of our own
+static Time serverTime()
+{
+    Display *dpy = qt_xdisplay();
+    Window w = XCreateSimpleWindow( dpy, qt_xrootwin(), 0, 0, 1, 1, 0, 0, 0 );
+    XSelectInput( dpy, w, PropertyChangeMask );
+    unsigned char data[ 1 ];
+    XChangeProperty( dpy, w, XA_ATOM, XA_ATOM, 8, PropModeAppend, data, 0 );
+    XEvent ev;
+    XWindowEvent( dpy, w, PropertyChangeMask, &ev );
+    XDestroyWindow( dpy, w );
+    return ev.xproperty.time;
+}
+
 QString QuickShot::screenshotFolder()
 {
     return xdgUserDir( "PICTURES", "Pictures" ) + "/" +
-        i18n( "folder name", "Screenshots" );
+        i18n( "folder name", "Screenshots" ).replace( '/', '-' );
 }
 
 QuickShot::QuickShot( Mode m )
@@ -117,35 +134,42 @@ bool QuickShot::process( const QCString &fun, const QByteArray &data,
 /*
  The popups of the screenshots taken just before would be in this one:
  their programs (still serving the clipboard, or waiting for the popup to
- time out) hide them first.
+ time out) hide them first.  Returns whether there were any.
 */
-void QuickShot::hideOtherPopups()
+bool QuickShot::hideOtherPopups()
 {
     DCOPClient *client = kapp->dcopClient();
     if ( client->registerAs( "ksnapshot" ).isEmpty() )
-        return;
+        return false;
+    bool others = false;
     const QCStringList apps = client->registeredApplications();
     for ( QCStringList::ConstIterator it = apps.begin(); it != apps.end(); ++it ) {
         if ( ( *it ).find( "ksnapshot-" ) != 0 || *it == client->appId() )
             continue;
-        QCString replyType;
-        QByteArray replyData;
-        client->call( *it, "quickshot", "hidePopup()", QByteArray(),
-                      replyType, replyData, false, 1000 );
+        // not a call: two of us starting together would wait for each other
+        client->send( *it, "quickshot", "hidePopup()", QByteArray() );
+        others = true;
     }
+    return others;
 }
 
 void QuickShot::start()
 {
-    hideOtherPopups();
+    // time for the popups to go and for the windows under them (or the
+    // compositor) to repaint
+    const int delay = hideOtherPopups() ? 250 : 0;
 
     if ( mode == Region ) {
-        regionGrabber = new RegionGrabber( 0 );
+        regionGrabber = new RegionGrabber( delay );
         connect( regionGrabber, SIGNAL( regionGrabbed( const QPixmap & ) ),
                  SLOT( slotRegionGrabbed( const QPixmap & ) ) );
         return;
     }
+    QTimer::singleShot( delay, this, SLOT( grab() ) );
+}
 
+void QuickShot::grab()
+{
     QPixmap pix;
     if ( mode == ActiveWindow )
         pix = WindowGrabber::grabActive();
@@ -178,6 +202,10 @@ void QuickShot::deliver( const QPixmap &pix )
     QString error;
     fileName = save( img, &error );
 
+    // Qt takes the selection with the time of the last X event; there may
+    // have been none (no input in these modes): then a fresh server time
+    if ( qt_x_time == CurrentTime )
+        qt_x_time = serverTime();
     QClipboard *clipboard = QApplication::clipboard();
     clipboard->setImage( img, QClipboard::Clipboard );
     ownsClipboard = clipboard->ownsClipboard();
@@ -196,7 +224,7 @@ QString QuickShot::save( const QImage &img, QString *error )
     }
 
     const QString base = dir + "/" + i18n( "file name; %1 is the date and time",
-        "Screenshot From %1" ).arg(
+        "Screenshot From %1" ).replace( '/', '-' ).arg(
         QDateTime::currentDateTime().toString( "yyyy-MM-dd hh-mm-ss" ) );
     QString name = base + ".png";
     for ( int n = 2; QFile::exists( name ); ++n )

@@ -40,6 +40,7 @@ public:
 
 private slots:
     void start();
+    void grab();
     void slotRegionGrabbed( const QPixmap &pix );
     void slotClipboardChanged();
     void slotOpen();
@@ -48,7 +49,7 @@ private slots:
     void maybeQuit();
 
 private:
-    void hideOtherPopups();
+    bool hideOtherPopups();
     void deliver( const QPixmap &pix );
     QString save( const QImage &img, QString *error );
     void notify( const QPixmap &pix, const QString &error );

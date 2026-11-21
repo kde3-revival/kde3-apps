@@ -113,9 +113,14 @@ QRect RegionGrabber::selection() const
     return QRect();
   // from the press to the pointer, the pointer's pixel excluded: dragging
   // 400 pixels selects 400
-  return QRect( QMIN( startPos.x(), endPos.x() ), QMIN( startPos.y(), endPos.y() ),
-                QABS( endPos.x() - startPos.x() ), QABS( endPos.y() - startPos.y() ) )
-      & rect();
+  int left = QMIN( startPos.x(), endPos.x() ), right = QMAX( startPos.x(), endPos.x() );
+  int top = QMIN( startPos.y(), endPos.y() ), bottom = QMAX( startPos.y(), endPos.y() );
+  // the pointer cannot go past the last column or row: there it takes them
+  if ( right == width() - 1 && right > left )
+    right = width();
+  if ( bottom == height() - 1 && bottom > top )
+    bottom = height();
+  return QRect( left, top, right - left, bottom - top ) & rect();
 }
 
 QRect RegionGrabber::labelRect( const QRect &sel ) const
