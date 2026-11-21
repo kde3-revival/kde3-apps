@@ -2,10 +2,6 @@
 configure.in.in
 ./kamera/configure.in.in
 ./kdvi/configure.in.in
-./kfile-plugins/configure.in.bot
-./kfile-plugins/exr/configure.in.in
-./kfile-plugins/pdf/configure.in.in
-./kfile-plugins/tiff/configure.in.in
 ./kgamma/configure.in.in
 ./kooka/configure.in.in
 ./kpdf/configure.in.bot
