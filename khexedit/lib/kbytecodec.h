@@ -41,6 +41,8 @@ class KByteCodec
 
   protected: // hiding, as this class should never be instanciated
     KByteCodec() {}
+  public:
+    virtual ~KByteCodec() {}
 
   public: // API to be implemented
     /** */
