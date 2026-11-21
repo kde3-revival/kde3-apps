@@ -39,6 +39,9 @@ class KHEXEDIT_EXPORT KCharCodec
 
     static const QStringList &codecNames();
 
+  public:
+    virtual ~KCharCodec() {}
+
   public: // API to be implemented
     virtual KHEChar decode( char Byte ) const = 0;
     virtual bool encode( char *D, const QChar &C ) const = 0;
