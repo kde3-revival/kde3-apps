@@ -908,7 +908,7 @@ ArkWidget::extractRemoteInitiateMoving( const KURL & target )
 
     m_extractURL.adjustPath( 1 );
 
-    KIO::CopyJob *job = KIO::copy( srcList, target, this );
+    KIO::CopyJob *job = KIO::copy( srcList, target, true );
     connect( job, SIGNAL(result(KIO::Job*)),
             this, SLOT(slotExtractRemoteDone(KIO::Job*)) );
 
