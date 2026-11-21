@@ -1761,7 +1761,7 @@ void KHexEdit::autoScrollTimerDone()
 void KHexEdit::handleMouseMove( const QPoint& Point ) // handles the move of the mouse with pressed buttons
 {
   // no scrolltimer and outside of viewport?
-  if( !ScrollTimer->isActive() && Point.y() < contentsY() || Point.y() > contentsY() + visibleHeight() )
+  if( (!ScrollTimer->isActive() && Point.y() < contentsY()) || Point.y() > contentsY() + visibleHeight() )
     ScrollTimer->start( DefaultScrollTimerPeriod, false );
   // scrolltimer but inside of viewport?
   else if( ScrollTimer->isActive() && Point.y() >= contentsY() && Point.y() <= contentsY() + visibleHeight() )
