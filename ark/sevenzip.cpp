@@ -47,11 +47,16 @@ SevenZipArch::SevenZipArch( ArkWidget *gui, const QString &filename )
   bool have_7z = !KGlobal::dirs()->findExe( "7z" ).isNull();
   // Check if 7za is available
   bool have_7za = !KGlobal::dirs()->findExe( "7za" ).isNull();
+  // 7zz: the 7-Zip of 7-zip.org (21 and later), which replaced p7zip;
+  // some distributions install it without the 7z and 7za names
+  bool have_7zz = !KGlobal::dirs()->findExe( "7zz" ).isNull();
 
   if ( have_7z )
     m_archiver_program = m_unarchiver_program = "7z";  // Use 7z
   else if ( have_7za )
     m_archiver_program = m_unarchiver_program = "7za"; // Try 7za
+  else if ( have_7zz )
+    m_archiver_program = m_unarchiver_program = "7zz";
   else
     m_archiver_program = m_unarchiver_program = "7zr";
 
@@ -207,10 +212,11 @@ void SevenZipArch::unarchFileInternal( )
   // extract (and maybe overwrite)
   *kp << m_unarchiver_program << "x";
 
+  // never ask: 7-Zip would wait for an answer on stdin
   if ( ArkSettings::extractOverwrite() )
-  {
-    //*kp << "-ao";
-  }
+    *kp << "-aoa"; // overwrite all
+  else
+    *kp << "-aos"; // skip existing files
 
   *kp << m_filename;
 
@@ -248,7 +254,8 @@ bool SevenZipArch::processLine( const QCString& _line )
   unsigned int pos = 0;
   int strpos, len;
 
-  columns[ 0 ] = line.right( line.length() - m_nameColumnPos +1);
+  // the names are UTF-8 (local 8-bit), the rest of the line ASCII
+  columns[ 0 ] = QString::fromLocal8Bit( line.right( line.length() - m_nameColumnPos +1) );
   line.truncate( m_nameColumnPos );
 
   // Go through our columns, try to pick out data, return silently on failure
