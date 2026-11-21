@@ -221,10 +221,24 @@ ArchType ArchiveFormatInfo::archTypeForURL( const KURL & url )
 QString ArchiveFormatInfo::findMimeType( const KURL & url )
 {
     QString mimeType = KMimeType::findByURL( url )->name();
-    if ( mimeType != "application/x-bzip2" && mimeType != "application/x-gzip" )
+    // a compressed file may be a tar archive with an unusual name
+    QString tarMimeType;
+    if ( mimeType == "application/x-bzip2" )
+        tarMimeType = "application/x-tbz";
+    else if ( mimeType == "application/x-gzip" )
+        tarMimeType = "application/x-tgz";
+    else if ( mimeType == "application/x-xz" )
+        tarMimeType = "application/x-xz-compressed-tar";
+    else if ( mimeType == "application/zstd" )
+        tarMimeType = "application/x-zstd-compressed-tar";
+    else if ( mimeType == "application/x-lz4" )
+        tarMimeType = "application/x-lz4-compressed-tar";
+    else
         return mimeType;
 
-    QIODevice * dev = KFilterDev::deviceForFile( url.path(), mimeType );
+    // forced: without a filter (kdelibs older than the xz, zstd and lz4
+    // ones) the compressed data must not be taken for a tar header
+    QIODevice * dev = KFilterDev::deviceForFile( url.path(), mimeType, true );
     if ( !dev )
         return mimeType;
 
@@ -235,12 +249,7 @@ QString ArchiveFormatInfo::findMimeType( const KURL & url )
     delete dev;
 
     if ( n == 0x200 && buffer[0] != 0 && !strncmp(buffer + 257, "ustar", 5) )
-    {
-        if (mimeType == "application/x-bzip2")
-            return "application/x-tbz";
-        else
-            return "application/x-tgz";
-    }
+        return tarMimeType;
 
     return mimeType;
 }
