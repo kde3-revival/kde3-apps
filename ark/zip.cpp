@@ -39,6 +39,8 @@
 #include "zip.h"
 #include "arkwidget.h"
 #include "settings.h"
+#include "arkutils.h"
+#include "filelistview.h"
 
 
 ZipArch::ZipArch( ArkWidget *_gui, const QString & _fileName )
@@ -50,21 +52,44 @@ ZipArch::ZipArch( ArkWidget *_gui, const QString & _fileName )
   verifyUncompressUtilityIsAvailable( m_unarchiver_program );
 
   m_headerString = "----";
-  m_repairYear = 9; m_fixMonth = 7; m_fixDay = 8; m_fixTime = 10;
-  m_dateCol = 5;
   m_numCols = 7;
+  // the lines of "unzip -v" are parsed by processLine()
+}
 
-  m_archCols.append( new ArchColumns( 1, QRegExp( "[0-9]+" ) ) );
-  m_archCols.append( new ArchColumns( 2, QRegExp( "[^\\s]+" ) ) );
-  m_archCols.append( new ArchColumns( 3, QRegExp( "[0-9]+" ) ) );
-  m_archCols.append( new ArchColumns( 4, QRegExp( "[0-9.]+%" ) ) );
-  m_archCols.append( new ArchColumns( 7, QRegExp( "[01][0-9]" ), 2 ) );
-  m_archCols.append( new ArchColumns( 8, QRegExp( "[0-3][0-9]" ), 2 ) );
-  m_archCols.append( new ArchColumns( 9, QRegExp( "[0-9][0-9]" ), 2 ) );
-  m_archCols.append( new ArchColumns( 10, QRegExp( "[0-9:]+" ), 6 ) );
-  m_archCols.append( new ArchColumns( 6, QRegExp( "[a-fA-F0-9]+ {2}" ) ) );
-  m_archCols.append( new ArchColumns( 0, QRegExp( "[^\\n]+" ), 4096 ) );
+bool ZipArch::processLine( const QCString &line )
+{
+  // " Length   Method    Size  Cmpr    Date    Time   CRC-32   Name"
+  // The date is MM-DD-YY (UnZip 5), MM-DD-YYYY (UnZip 6) or YYYY-MM-DD
+  // (the ISO dates of distributions' UnZip 6, e.g. Arch and Debian).
+  static const QRegExp rx( "^\\s*(\\d+)\\s+(\\S+)\\s+(\\d+)\\s+(-?[0-9.]+%)\\s+"
+                           "(\\d+)-(\\d+)-(\\d+)\\s+(\\d+:\\d+)\\s+([0-9a-fA-F]{8})  (.*)$" );
+  QRegExp re( rx );
+  if ( re.search( QString::fromLocal8Bit( line ) ) == -1 )
+    return false;
 
+  QString year, month, day;
+  if ( re.cap( 5 ).length() == 4 )
+  {
+    year = re.cap( 5 ); month = re.cap( 6 ); day = re.cap( 7 );
+  }
+  else
+  {
+    month = re.cap( 5 ); day = re.cap( 6 );
+    year = re.cap( 7 ).length() == 2 ? ArkUtils::fixYear( re.cap( 7 ) )
+                                      : re.cap( 7 );
+  }
+
+  QStringList list;
+  list << re.cap( 10 )                       // name
+       << re.cap( 1 )                        // size
+       << re.cap( 2 )                        // method
+       << re.cap( 3 )                        // packed size
+       << re.cap( 4 )                        // ratio
+       << QString::fromLatin1( "%1-%2-%3 %4" ).arg( year ).arg( month )
+                                              .arg( day ).arg( re.cap( 8 ) )
+       << re.cap( 9 );                       // CRC
+  m_gui->fileList()->addItem( list );
+  return true;
 }
 
 void ZipArch::setHeaders()

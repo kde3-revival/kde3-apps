@@ -51,6 +51,7 @@ class ZipArch : public Arch
     virtual void remove( QStringList * );
     virtual void unarchFileInternal();
     virtual bool passwordRequired();
+    virtual bool processLine( const QCString &line );
   private:
     void setHeaders();
 };
