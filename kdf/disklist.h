@@ -124,6 +124,7 @@ private slots:
 
 private:
   void replaceDeviceEntry(DiskEntry *disk);
+  static QString resolveFstabDevice(const QString &spec);
 
   Disks            *disks;
   KProcess         *dfProc;

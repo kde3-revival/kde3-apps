@@ -274,7 +274,8 @@ QString DiskEntry::deviceRealName() const
     return link;
   relPath = link;
  }
- return dir.canonicalPath() + "/" + relPath;
+ // /dev/mapper/root -> ../dm-0: /dev/dm-0, as udev's /dev/disk links
+ return QDir::cleanDirPath( dir.canonicalPath() + "/" + relPath );
 }
 
 void DiskEntry::setMountPoint(const QString & mountPoint)

@@ -28,6 +28,9 @@
 #include <kdebug.h>
 #include <kapplication.h>
 
+#include <qdir.h>
+#include <qfileinfo.h>
+
 #include "disklist.h"
 
 #define BLANK ' '
@@ -164,6 +167,43 @@ return rc;
 }
 
 /***************************************************************************
+  * UUID=, LABEL=, PARTUUID= and PARTLABEL= of fstab as the device node
+  * df lists (through the udev links in /dev/disk); spec itself if there
+  * is no such link (the device is not connected) or it is a plain name
+**/
+QString DiskList::resolveFstabDevice(const QString &spec)
+{
+  static const char * const tags[][2] = {
+    { "UUID=", "/dev/disk/by-uuid/" },
+    { "LABEL=", "/dev/disk/by-label/" },
+    { "PARTUUID=", "/dev/disk/by-partuuid/" },
+    { "PARTLABEL=", "/dev/disk/by-partlabel/" },
+    { 0, 0 }
+  };
+  for (int i = 0; tags[i][0]; ++i) {
+    const QString tag = QString::fromLatin1(tags[i][0]);
+    if (!spec.startsWith(tag))
+      continue;
+    QString value = spec.mid(tag.length());
+    if (value.length() > 1 && (value[0] == '"' || value[0] == '\'')
+        && value[value.length()-1] == value[0])
+      value = value.mid(1, value.length() - 2);
+    // udev escapes these in the link names
+    value.replace('\\', "\\x5c");
+    value.replace('/', "\\x2f");
+    value.replace(' ', "\\x20");
+    QFileInfo link(QString::fromLatin1(tags[i][1]) + value);
+    if (link.exists()) {
+      const QString dev = link.readLink();
+      if (!dev.isEmpty())
+        return QDir::cleanDirPath(link.dirPath(true) + "/" + dev);
+    }
+    return spec;
+  }
+  return spec;
+}
+
+/***************************************************************************
   * tries to figure out the possibly mounted fs
 **/
 int DiskList::readFSTAB()
@@ -188,7 +228,7 @@ QFile f(FSTAB);
 	//	kdDebug() << "GOT: [" << s << "]" << endl;
 	disk = new DiskEntry();// Q_CHECK_PTR(disk);
         disk->setMounted(FALSE);
-        disk->setDeviceName(expandEscapes(s.left(s.find(BLANK))));
+        disk->setDeviceName(resolveFstabDevice(expandEscapes(s.left(s.find(BLANK)))));
             s=s.remove(0,s.find(BLANK)+1 );
 	    //  kdDebug() << "    deviceName:    [" << disk->deviceName() << "]" << endl;
 #ifdef Q_OS_SOLARIS
