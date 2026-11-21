@@ -73,13 +73,49 @@ RarArch::RarArch( ArkWidget *_gui, const QString & _fileName )
 
 
 
-  m_headerString = "-------------------------------------------------------------------------------";
+  // unrar 3 and 4 frame the listing with 79 dashes, unrar 5 and later
+  // with "----------- ---------- ..."
+  m_headerString = "-----------";
 
   m_isFirstLine = true;
 }
 
 bool RarArch::processLine( const QCString &line )
 {
+  // unrar 5 and later: one line per entry
+  //  Attributes       Size     Packed Ratio    Date    Time   Checksum  Name
+  //  -rw-r--r--         20         20 100%  2011-06-26 14:53  BEC8A242  test.txt
+  static const QRegExp rx( "^\\s*(\\S+)\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+"
+                           "(\\d+)-(\\d+)-(\\d+)\\s+(\\d+:\\d+)\\s+([0-9A-Fa-f]{8})  (.*)$" );
+  if ( m_isFirstLine )
+  {
+    QRegExp re( rx );
+    if ( re.search( QString::fromLocal8Bit( line ) ) != -1 )
+    {
+      QString year, month, day;
+      if ( re.cap( 5 ).length() == 4 )
+      {
+        year = re.cap( 5 ); month = re.cap( 6 ); day = re.cap( 7 );
+      }
+      else
+      {
+        year = ArkUtils::fixYear( re.cap( 7 ) ); month = re.cap( 6 ); day = re.cap( 5 );
+      }
+      QStringList list;
+      list << re.cap( 10 ) // filename
+           << re.cap( 2 )  // size
+           << re.cap( 3 )  // packed
+           << re.cap( 4 )  // ratio
+           << year + '-' + month + '-' + day + ' ' + re.cap( 8 ) // date
+           << re.cap( 1 )  // attributes
+           << re.cap( 9 )  // crc
+           << QString::null << QString::null; // method, version: not listed
+      m_gui->fileList()->addItem( list ); // send to GUI
+      return true;
+    }
+  }
+
+  // unrar 3 and 4: the name on a line of its own, then the details
   if ( m_isFirstLine )
   {
     m_entryFilename = QString::fromLocal8Bit( line );
