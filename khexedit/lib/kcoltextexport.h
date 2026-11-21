@@ -28,6 +28,9 @@ namespace KHE
  */
 class KColTextExport
 {
+  public:
+    virtual ~KColTextExport() {}
+
   public: // API
     virtual void printFirstLine( QString &T, int Line ) const = 0;
     virtual void printNextLine( QString &T ) const = 0;
