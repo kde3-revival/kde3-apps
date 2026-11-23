@@ -115,6 +115,7 @@ int main( int argc, char ** argv )
         fprintf( stderr,
             "usage: kpdfcheck render FILE PAGE WIDTH OUT.png\n"
             "       kpdfcheck text FILE PAGE\n"
+            "       kpdfcheck boxes FILE PAGE FROM TO     (character boxes)\n"
             "       kpdfcheck rect FILE PAGE L T R B      (text of a normalized rect)\n"
             "       kpdfcheck select FILE PAGE X1 Y1 X2 Y2 (text selection between two points)\n"
             "       kpdfcheck search FILE WORD [case]\n"
@@ -189,7 +190,7 @@ int main( int argc, char ** argv )
             return 1;
         }
     }
-    else if ( ( cmd == "text" || cmd == "rect" || cmd == "select" || cmd == "links" ) && args.count() >= 1 )
+    else if ( ( cmd == "text" || cmd == "boxes" || cmd == "rect" || cmd == "select" || cmd == "links" ) && args.count() >= 1 )
     {
         int page = args[0].toInt() - 1;
         if ( page < 0 || page >= (int)pages )
@@ -199,6 +200,13 @@ int main( int argc, char ** argv )
         const KPDFTextPage * tp = kp->textPage();
         if ( cmd == "text" )
             out << tp->text();
+        else if ( cmd == "boxes" && args.count() >= 3 )
+            for ( uint i = args[1].toUInt(); i < tp->length() && i < args[2].toUInt(); ++i )
+            {
+                NormalizedRect r = tp->charRect( i );
+                out << QString( "%1 U+%2 %3 %4 %5 %6\n" ).arg( i ).arg( tp->text()[i].unicode(), 4, 16 )
+                       .arg( r.left, 0, 'f', 3 ).arg( r.top, 0, 'f', 3 ).arg( r.right, 0, 'f', 3 ).arg( r.bottom, 0, 'f', 3 );
+            }
         else if ( cmd == "rect" && args.count() >= 5 )
             out << kp->getText( NormalizedRect( args[1].toDouble(), args[2].toDouble(), args[3].toDouble(), args[4].toDouble() ) );
         else if ( cmd == "select" && args.count() >= 5 )
