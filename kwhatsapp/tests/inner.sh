@@ -288,6 +288,22 @@ EOC
   check notification-no-content $O/knotify.log ': New message$' 10
   grep -q Alice $O/knotify.log && fail notification-no-content-hidden "sender shown" || ok notification-no-content-hidden
 
+  # a frame of another site sends the top to about:blank: not trusted,
+  # the application's page comes back
+  : > $O/page.log
+  click 1110 545
+  check frame-top-blank-sent $O/page.log '^frame sent top to about:blank' 10
+  check frame-top-blank-reported $O/kwhatsapp-$RUN.log 'committed about:blank, not one of the application' 10
+  check frame-top-blank-back-to-app $O/page.log '^load visit=' 15
+  sleep 1
+  # a frame of another site asks for the location (delegated): refused,
+  # not in the name of the application's origin
+  click 1110 595
+  check frame-geolocation-not-granted $O/page.log '^frame geolocation error' 15
+  if grep -q 'denied geolocation for http' $O/kwhatsapp-$RUN.log; then
+    fail frame-geolocation-not-attributed "$(grep 'denied geolocation' $O/kwhatsapp-$RUN.log)"
+  else ok frame-geolocation-not-attributed; fi
+
   # another site without a link the user followed: never in the window
   confined() {   # confined STEP: no other site in the app, the page is the app's
     sleep 3
@@ -307,9 +323,10 @@ EOC
   printf '[Notifications]\nAllowed=http://localhost:8080/,http://localhost:8080,garbage\nDenied=HTTP://LOCALHOST:8080\n' \
     > $KDEHOME/share/apps/kwhatsapp/webkit/kwpepart-permissions
   RUN=3
+  : > $O/page.log
   start_app --url http://localhost:8080/app.html || return
   # (WebKit reports an origin denied at start as "default")
-  check permissions-not-granted $O/page.log '^load visit=4 .*permission=(denied|default)' 20
+  check permissions-not-granted $O/page.log '^load visit=.*permission=(denied|default)' 20
   check permissions-query-not-granted $O/page.log '^query (denied|prompt)' 10
   click 130 55
   check permissions-denial-wins $O/page.log '^permission denied' 10
