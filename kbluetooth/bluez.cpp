@@ -508,6 +508,7 @@ bool Bluez::device(const QString &path, BluezDevice &d) const
     d.path = path;
     d.adapter = property(path, deviceInterface, "Adapter").toString();
     d.address = property(path, deviceInterface, "Address").toString();
+    d.named = property(path, deviceInterface, "Name").isValid();
     d.name = property(path, deviceInterface, "Alias").toString();
     if (d.name.isEmpty())
         d.name = property(path, deviceInterface, "Name").toString();

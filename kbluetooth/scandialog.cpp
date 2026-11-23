@@ -29,6 +29,20 @@ static const char stateConnecting[] = "connecting";
 static const char stateDone[] = "done";
 static const char stateFailed[] = "failed";
 
+// The devices that told their name first: a scan in a city finds many
+// nameless ones (Bluetooth LE beacons, phones with random addresses)
+class ScanItem : public QListViewItem
+{
+public:
+    ScanItem(QListView *list) : QListViewItem(list), named(true) {}
+    virtual QString key(int column, bool ascending) const
+    {
+        QString k = QListViewItem::key(column, ascending);
+        return column == 0 ? (named ? "0" : "1") + k.lower() : k;
+    }
+    bool named;
+};
+
 ScanDialog::ScanDialog(BluetoothTray *tray)
     : KDialogBase(0, "scandialog", false, i18n("Bluetooth Devices"),
                   User1 | Close, User1, true, KGuiItem(i18n("&Pair"), "connect_creating")),
@@ -168,13 +182,14 @@ void ScanDialog::updateItem(const QString &path)
         }
         return;
     }
-    QListViewItem *item = m_items.contains(path) ? m_items[path] : 0;
+    ScanItem *item = m_items.contains(path) ? static_cast<ScanItem *>(m_items[path]) : 0;
     if (!item) {
-        item = new QListViewItem(m_list);
+        item = new ScanItem(m_list);
         m_items.insert(path, item);
     }
+    item->named = d.named;
     item->setPixmap(0, KBluetoothIcons::deviceIcon(d.icon, 16));
-    item->setText(0, d.name);
+    item->setText(0, d.named ? d.name : i18n("Unnamed device"));
     item->setText(2, d.hasRssi ? i18n("%1 dBm").arg(d.rssi) : QString::fromLatin1("-"));
     item->setText(3, KBluetoothIcons::deviceType(d.icon));
     item->setText(4, d.address);

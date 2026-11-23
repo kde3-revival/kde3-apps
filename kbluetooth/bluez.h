@@ -41,6 +41,7 @@ struct BluezDevice
     QString adapter;
     QString address;
     QString name;           // Alias, which falls back to Name or the address
+    bool named;             // the device told its name (BlueZ has Name)
     QString icon;           // freedesktop icon name BlueZ derives from the class
     bool paired;
     bool trusted;
@@ -52,7 +53,7 @@ struct BluezDevice
     QStringList uuids;
 
     BluezDevice()
-        : paired(false), trusted(false), blocked(false), connected(false),
+        : named(false), paired(false), trusted(false), blocked(false), connected(false),
           hasRssi(false), rssi(0), battery(-1) {}
 };
 

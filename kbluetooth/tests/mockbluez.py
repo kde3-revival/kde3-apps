@@ -68,6 +68,8 @@ DISCOVERABLE = [
     ('5C:F3:70:B0:00:15', 'Garden Speaker', 'audio-card', -90, 'timeout', True),
     ('5C:F3:70:B0:00:16', 'Label Printer', 'printer', -66, 'passkey', True),
     ('5C:F3:70:B0:00:17', 'Old Headset', 'audio-headset', -62, 'displaypin', True),
+    # without a name, like the LE beacons a real scan finds
+    ('4C:09:2A:02:74:70', None, None, -77, 'justworks', False),
 ]
 
 
@@ -199,13 +201,17 @@ class Device(Obj):
         self.connectOk = connectOk
         self.pairing = None
         self.props[DEVICE] = {
-            'Address': address, 'AddressType': 'public', 'Name': name, 'Alias': name,
-            'Icon': icon, 'Paired': dbus.Boolean(paired), 'Bonded': dbus.Boolean(paired),
+            'Address': address, 'AddressType': 'public',
+            'Alias': name or address.replace(':', '-'), 'Paired': dbus.Boolean(paired), 'Bonded': dbus.Boolean(paired),
             'Trusted': dbus.Boolean(paired), 'Blocked': dbus.Boolean(False),
             'Connected': dbus.Boolean(connected), 'LegacyPairing': dbus.Boolean(False),
             'ServicesResolved': dbus.Boolean(connected),
             'UUIDs': dbus.Array(uuids, signature='s'), 'Adapter': dbus.ObjectPath(adapter.path),
         }
+        if name:
+            self.props[DEVICE]['Name'] = name
+        if icon:
+            self.props[DEVICE]['Icon'] = icon
         if rssi is not None:
             self.props[DEVICE]['RSSI'] = dbus.Int16(rssi)
         if battery is not None:
@@ -213,7 +219,7 @@ class Device(Obj):
 
     def setProperty(self, iface, name, value):
         if iface == DEVICE and name == 'Alias':
-            value = value or self.props[DEVICE]['Name']
+            value = value or self.props[DEVICE].get('Name', self.props[DEVICE]['Address'].replace(':', '-'))
         Obj.setProperty(self, iface, name, value)
 
     @dbus.service.method(DEVICE, async_callbacks=('ok', 'err'))
@@ -249,7 +255,7 @@ class Device(Obj):
         self.set(DEVICE, 'Bonded', dbus.Boolean(True))
         uuids = {'phone': [HFP, OPP], 'input-keyboard': [HID], 'input-mouse': [HID],
                  'printer': [], 'audio-card': [A2DP_SINK, AVRCP],
-                 'audio-headset': [HFP]}.get(self.props[DEVICE]['Icon'], [])
+                 'audio-headset': [HFP]}.get(self.props[DEVICE].get('Icon'), [])
         self.set(DEVICE, 'UUIDs', dbus.Array(uuids, signature='s'))
 
     @dbus.service.method(DEVICE, async_callbacks=('ok', 'err'))
