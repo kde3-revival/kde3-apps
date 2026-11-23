@@ -63,6 +63,20 @@ static bool unite( const KPDFTextPage * tp, uint from, uint to, NormalizedRect &
     return any;
 }
 
+// 1 left to right, -1 right to left, 0 neutral or weak
+static int strongDirection( QChar c )
+{
+    switch ( c.direction() )
+    {
+        case QChar::DirL: case QChar::DirLRE: case QChar::DirLRO:
+            return 1;
+        case QChar::DirR: case QChar::DirAL: case QChar::DirRLE: case QChar::DirRLO:
+            return -1;
+        default:
+            return 0;
+    }
+}
+
 static bool sameRect( const NormalizedRect & a, const NormalizedRect & b )
 {
     const double eps = 1e-6;
@@ -253,18 +267,51 @@ uint KPDFTextPage::cursorAt( double x, double y ) const
         }
     }
 
-    // before or after the character, in the direction of its line
+    // before or after the character, in its writing direction: its own
+    // bidi class, else the nearest strong character of its line, else the
+    // order of the boxes
     uint i = best;
-    bool rtl = false;
-    for ( int j = (int)i + 1; j < (int)len && j <= (int)i + 8; ++j )
-        if ( hasBox( j ) )
+    int dir = strongDirection( m_text[i] );
+    for ( uint k = 1; dir == 0 && k <= 32; ++k )
+    {
+        bool any = false;
+        if ( i + k < len && m_text[i + k] != '\n' )
         {
-            if ( cy( j ) >= m_rects[4*i+1] && cy( j ) <= m_rects[4*i+3] )
-                rtl = cx( j ) < cx( i );
-            break;
+            dir = strongDirection( m_text[i + k] );
+            any = true;
         }
-    bool after = rtl ? x < cx( i ) : x > cx( i );
-    return after ? i + 1 : i;
+        if ( dir == 0 && i >= k && m_text[i - k] != '\n' )
+        {
+            dir = strongDirection( m_text[i - k] );
+            any = true;
+        }
+        if ( !any )
+            break;
+    }
+    if ( dir == 0 )
+    {
+        dir = 1;
+        for ( int j = (int)i + 1; j < (int)len && j <= (int)i + 8; ++j )
+            if ( hasBox( j ) )
+            {
+                if ( cy( j ) >= m_rects[4*i+1] && cy( j ) <= m_rects[4*i+3] && cx( j ) < cx( i ) )
+                    dir = -1;
+                break;
+            }
+    }
+    bool after = dir < 0 ? x < cx( i ) : x > cx( i );
+
+    // a character outside the BMP is two QChars with one box: never
+    // between them
+    uint start = i, end = i + 1;
+    ushort u = m_text[i].unicode();
+    if ( u >= 0xd800 && u <= 0xdbff && end < len &&
+         m_text[end].unicode() >= 0xdc00 && m_text[end].unicode() <= 0xdfff )
+        ++end;
+    else if ( u >= 0xdc00 && u <= 0xdfff && start > 0 &&
+              m_text[start - 1].unicode() >= 0xd800 && m_text[start - 1].unicode() <= 0xdbff )
+        --start;
+    return after ? end : start;
 }
 
 QString KPDFTextPage::text( uint from, uint to ) const
