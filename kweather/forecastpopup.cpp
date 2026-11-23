@@ -18,6 +18,7 @@
 #include <qpainter.h>
 #include <qstringlist.h>
 #include <qstylesheet.h>
+#include <qtabbar.h>
 #include <qtooltip.h>
 
 #include <kcalendarsystem.h>
@@ -28,6 +29,7 @@
 #include <kpanelapplet.h>
 #include <kseparator.h>
 
+#include "forecastchart.h"
 #include "weathericons.h"
 #include "weatherservice_stub.h"
 
@@ -45,14 +47,6 @@ QColor blend(const QColor &a, const QColor &b, double share)
     return QColor(int(a.red() * share + b.red() * (1 - share)),
                   int(a.green() * share + b.green() * (1 - share)),
                   int(a.blue() * share + b.blue() * (1 - share)));
-}
-
-/** Amounts of rain: the blue of the drops of the icons, darker or lighter
-    to stand out from the background. */
-QColor rainColor(const QWidget *w)
-{
-    QColor bg = w->palette().active().background();
-    return qGray(bg.rgb()) > 128 ? QColor(28, 104, 190) : QColor(96, 168, 240);
 }
 
 /** Text of less importance: between the text and the background. */
@@ -75,12 +69,6 @@ double value(const QStringList &fields, uint i, bool *ok)
         return 0;
     }
     return QLocale::c().toDouble(f, ok);
-}
-
-QString degrees(double v)
-{
-    long r = lround(v);
-    return QString::number(r == 0 ? 0 : r) + QString::fromUtf8("\xc2\xb0");
 }
 
 /** An amount worth showing (0.05 mm on), without its unit; empty if none. */
@@ -130,46 +118,6 @@ QLabel *iconLabel(QWidget *parent, const QString &name, int size, const QString 
     return l;
 }
 
-/** The temperatures of a day within those of the week. */
-class RangeBar : public QWidget
-{
-public:
-    RangeBar(QWidget *parent, double weekMin, double weekMax, double lo, double hi)
-        : QWidget(parent), m_min(weekMin), m_max(weekMax), m_lo(lo), m_hi(hi)
-    {
-        setBackgroundMode(PaletteBackground);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        setMinimumWidth(60);
-        setFixedHeight(fontMetrics().height());
-    }
-
-    QSize sizeHint() const { return QSize(120, fontMetrics().height()); }
-
-protected:
-    void paintEvent(QPaintEvent *)
-    {
-        QPainter p(this);
-        const QColorGroup &cg = palette().active();
-        int h = 6;
-        int y = (height() - h) / 2;
-        int w = width();
-        p.setPen(Qt::NoPen);
-        p.setBrush(blend(cg.foreground(), cg.background(), 0.15));
-        p.drawRoundRect(0, y, w, h, 99 * h / QMAX(w, 1), 99);
-        double span = m_max - m_min;
-        int x1 = 0, x2 = w;
-        if (span > 0) {
-            x1 = int((m_lo - m_min) / span * (w - h));
-            x2 = int((m_hi - m_min) / span * (w - h)) + h;
-        }
-        p.setBrush(cg.highlight());
-        p.drawRoundRect(x1, y, QMAX(x2 - x1, h), h, 99 * h / QMAX(x2 - x1, h), 99);
-    }
-
-private:
-    double m_min, m_max, m_lo, m_hi;
-};
-
 QWidget *separator(QWidget *parent)
 {
     return new KSeparator(KSeparator::HLine, parent);
@@ -180,7 +128,9 @@ QWidget *separator(QWidget *parent)
 ForecastPopup::ForecastPopup(WeatherService_stub *service,
                              const QString &location, QWidget *parent,
                              const char *name)
-    : QFrame(parent, name, WType_Popup), m_content(0)
+    : QFrame(parent, name, WType_Popup), m_content(0), m_service(service),
+      m_location(location), m_chart(0), m_strip(0), m_tabs(0), m_dayCaption(0),
+      m_day(0), m_kind(HourChart::Temperature)
 {
     setFrameStyle(QFrame::PopupPanel | QFrame::Raised);
     setLineWidth(1);
@@ -204,13 +154,16 @@ void ForecastPopup::build(WeatherService_stub *service, const QString &location,
                           int level)
 {
     delete m_content;
+    m_chart = 0;
+    m_strip = 0;
+    m_tabs = 0;
+    m_dayCaption = 0;
     m_content = new QWidget(this);
     QWidget *w = m_content;
     layout()->add(w);
 
     const int margin = KDialog::marginHint();
     const int spacing = KDialog::spacingHint();
-    const int center = Qt::AlignHCenter | Qt::AlignVCenter;
     const int right = Qt::AlignRight | Qt::AlignVCenter;
     const int left = Qt::AlignAuto | Qt::AlignVCenter;
     KLocale *loc = KGlobal::locale();
@@ -228,17 +181,15 @@ void ForecastPopup::build(WeatherService_stub *service, const QString &location,
     QRect screen = QApplication::desktop()->screenGeometry(parentWidget());
     int hourColumns = (screen.width() - 2 * margin - 2 * frameWidth() - 16) / column;
     hourColumns = QMAX(4, QMIN(12, hourColumns));
-    setFixedWidth(QMIN(hourColumns * column + 2 * margin + 2 * frameWidth(), screen.width()));
-    // the day bars: 3 columns at full width, less when the popup is narrower
-    const int barWidth = column * QMAX(1, QMIN(3, hourColumns - 9));
+    const int popupWidth = QMIN(hourColumns * column + 2 * margin + 2 * frameWidth(), screen.width());
+    setFixedWidth(popupWidth);
+    const int contentWidth = popupWidth - 2 * margin - 2 * frameWidth();
 
-    // smaller, and fewer, when the screen is too short for everything
+    // smaller when the screen is too short for everything
     const bool compact = level >= 1;
-    const int maxDays = level >= 3 ? 3 : level >= 2 ? 5 : 7;
-    const int smallIcons = level >= 4;
-    const int hourIconSize = smallIcons ? 22 : hourIcon;
-    const int dayIconSize = smallIcons ? 22 : dayIcon;
-    const bool withDetails = level < 5;
+    const int chartHeight = (level >= 2 ? 6 : 9) * fm.height();
+    const bool withDetails = level < 3;
+    const int cardIcon = level >= 4 ? 22 : dayIcon;
 
     // the place, and when the data is from
     QHBoxLayout *header = new QHBoxLayout(top, spacing);
@@ -315,115 +266,56 @@ void ForecastPopup::build(WeatherService_stub *service, const QString &location,
             top->addWidget(separator(w));
         }
 
-        // the next 12 hours: equal columns
-        QStringList hours = service->hourlyValues(location, hourColumns);
-        if (!hours.isEmpty()) {
-            QStringList first = QStringList::split(QChar('\t'), hours.first(), true);
-            QLabel *caption = label(w, i18n("Next hours"), left, 1.0, true);
-            QHBoxLayout *ch = new QHBoxLayout(top, spacing);
-            ch->addWidget(caption);
-            ch->addWidget(label(w, i18n("units of temperature and precipitation", "%1, %2")
-                                    .arg(field(first, 6)).arg(field(first, 7)),
-                                left, 0.85, false, true));
-            ch->addStretch();
-            QGridLayout *grid = new QGridLayout(top, 4, hourColumns, 0);
-            grid->setRowSpacing(1, hourIconSize + 4);
-            int c = 0;
-            for (QStringList::ConstIterator it = hours.begin(); it != hours.end() && c < hourColumns; ++it, ++c) {
-                QStringList f = QStringList::split(QChar('\t'), *it, true);
-                bool ok;
-                QDateTime t = QDateTime::fromString(field(f, 0), Qt::ISODate);
-                grid->addWidget(label(w, loc->formatTime(t.time()), center, 0.9, false, true), 0, c);
-                grid->addWidget(iconLabel(w, field(f, 1), hourIconSize, field(f, 5)), 1, c, Qt::AlignCenter);
-                double temp = value(f, 2, &ok);
-                grid->addWidget(label(w, ok ? degrees(temp) : QString::null, center, 1.0, true), 2, c);
-                double p = value(f, 3, &ok);
-                QString text = ok ? amount(p, field(f, 7)) : QString::null;
-                QLabel *r;
-                if (!text.isEmpty()) {
-                    r = label(w, text, center, 0.85);
-                    r->setPaletteForegroundColor(rainColor(w));
-                } else {
-                    double prob = value(f, 4, &ok);
-                    r = label(w, ok && prob >= 10 ? i18n("%1 %").arg(long(prob)) : QString::null,
-                              center, 0.85, false, true);
-                }
-                grid->addWidget(r, 3, c);
-                grid->setColStretch(c, 1);
-                grid->addColSpacing(c, column);
-            }
-            top->addWidget(separator(w));
-        }
+        // the hours of the selected day as a chart: temperature,
+        // precipitation or wind
+        QHBoxLayout *ch = new QHBoxLayout(top, spacing);
+        m_tabs = new QTabBar(w);
+        m_tabs->setFocusPolicy(NoFocus);
+        m_tabs->addTab(new QTab(i18n("Temperature")));
+        m_tabs->addTab(new QTab(i18n("Precipitation")));
+        m_tabs->addTab(new QTab(i18n("Wind")));
+        m_tabs->setCurrentTab(m_kind);
+        connect(m_tabs, SIGNAL(selected(int)), SLOT(slotKind(int)));
+        ch->addWidget(m_tabs, 0, Qt::AlignBottom);
+        ch->addStretch();
+        m_dayCaption = label(w, QString::null, right | Qt::AlignBottom, 0.85, false, true);
+        ch->addWidget(m_dayCaption);
+        m_chart = new HourChart(w, chartHeight);
+        m_chart->setKind(m_kind);
+        top->addWidget(m_chart);
 
-        // the next days: rows in columns, the temperatures within the week's
+        // the days, as cards to choose the day of the chart
         QStringList days = service->dailyValues(location);
-        while (int(days.count()) > maxDays)
-            days.remove(days.fromLast());
-        if (!days.isEmpty()) {
-            QStringList first = QStringList::split(QChar('\t'), days.first(), true);
-            QHBoxLayout *ch = new QHBoxLayout(top, spacing);
-            ch->addWidget(label(w, i18n("Next day", "Next %n days", days.count()), left, 1.0, true));
-            ch->addWidget(label(w, i18n("units of temperature and precipitation", "%1, %2")
-                                    .arg(field(first, 7)).arg(field(first, 8)),
-                                left, 0.85, false, true));
-            ch->addStretch();
-
-            double weekMin = 1e9, weekMax = -1e9;
-            for (QStringList::ConstIterator it = days.begin(); it != days.end(); ++it) {
-                QStringList f = QStringList::split(QChar('\t'), *it, true);
-                bool ok1, ok2;
-                double hi = value(f, 2, &ok1), lo = value(f, 3, &ok2);
-                if (ok1 && ok2) {
-                    weekMin = QMIN(weekMin, lo);
-                    weekMax = QMAX(weekMax, hi);
-                }
-            }
-
-            // the gaps between the columns are in their widths: the rows
-            // stay close together
-            QGridLayout *grid = new QGridLayout(top, days.count(), 9, 2);
-            grid->setColStretch(8, 1);
-            const int degreesWidth = fm.width(QString::fromLatin1("-88")) + fm.width(QChar(0xb0));
-            QDate today = QDate::fromString(service->localDate(location), Qt::ISODate);
-            if (!today.isValid())
-                today = QDate::currentDate();
-            int row = 0;
-            for (QStringList::ConstIterator it = days.begin(); it != days.end(); ++it, ++row) {
-                QStringList f = QStringList::split(QChar('\t'), *it, true);
-                QDate date = QDate::fromString(field(f, 0), Qt::ISODate);
-                QString day = date == today ? i18n("Today")
-                            : date == today.addDays(1) ? i18n("Tomorrow")
-                            : loc->calendar()->weekDayName(date, false);
-                grid->addWidget(label(w, day, left), row, 0);
-                grid->addWidget(iconLabel(w, field(f, 1), dayIconSize, field(f, 6)), row, 1, Qt::AlignCenter);
-                bool okHi, okLo, ok;
-                double hi = value(f, 2, &okHi), lo = value(f, 3, &okLo);
-                grid->addWidget(label(w, okLo ? degrees(lo) : QString::null, right, 1.0, false, true), row, 3);
-                if (okHi && okLo) {
-                    RangeBar *bar = new RangeBar(w, weekMin, weekMax, lo, hi);
-                    bar->setFixedWidth(barWidth);
-                    grid->addWidget(bar, row, 4, Qt::AlignCenter);
-                }
-                grid->addWidget(label(w, okHi ? degrees(hi) : QString::null, right, 1.0, true), row, 5);
-                double p = value(f, 4, &ok);
-                QString text = ok ? amount(p, field(f, 8)) : QString::null;
-                QLabel *r = label(w, text, right);
-                r->setPaletteForegroundColor(rainColor(w));
-                grid->addWidget(r, row, 6);
-                double prob = value(f, 5, &ok);
-                grid->addWidget(label(w, ok && !text.isEmpty() ? i18n("%1 %").arg(long(prob))
-                                                                  : QString::null,
-                                      right, 0.85, false, true), row, 7);
-            }
-            grid->addColSpacing(0, fm.width(i18n("Wednesday")) + 2 * spacing);
-            grid->addColSpacing(1, dayIconSize + 2 * spacing);
-            grid->addColSpacing(3, degreesWidth + spacing);
-            grid->addColSpacing(4, barWidth + 2 * spacing);
-            grid->addColSpacing(5, degreesWidth + spacing);
-            grid->addColSpacing(6, fm.width(loc->formatNumber(88.8, 1)) + 3 * spacing);
-            grid->addColSpacing(7, fm.width(QString::fromLatin1("100 %")) + 2 * spacing);
-            top->addWidget(separator(w));
+        QValueList<ForecastDay> list;
+        m_dates.clear();
+        for (QStringList::ConstIterator it = days.begin(); it != days.end(); ++it) {
+            QStringList f = QStringList::split(QChar('\t'), *it, true);
+            ForecastDay d;
+            d.date = QDate::fromString(field(f, 0), Qt::ISODate);
+            d.icon = field(f, 1);
+            d.description = field(f, 6);
+            bool okHi, okLo, ok;
+            d.high = value(f, 2, &okHi);
+            d.low = value(f, 3, &okLo);
+            d.hasTemperature = okHi && okLo;
+            double p = value(f, 4, &ok);
+            QString a = ok ? amount(p, field(f, 8)) : QString::null;
+            d.precipitation = a.isEmpty() ? a : a + QChar(' ') + field(f, 8);
+            list.append(d);
+            m_dates.append(d.date);
         }
+        m_today = QDate::fromString(service->localDate(location), Qt::ISODate);
+        if (!m_today.isValid())
+            m_today = QDate::currentDate();
+        m_strip = new DayStrip(w, contentWidth, cardIcon);
+        m_strip->setDays(list, m_today);
+        m_day = QMAX(0, QMIN(m_day, int(list.count()) - 1));
+        m_strip->setCurrent(m_day);
+        connect(m_strip, SIGNAL(selected(int)), SLOT(slotDay(int)));
+        top->addWidget(m_strip);
+        top->addWidget(separator(w));
+        showDay();
+
         if (!error.isEmpty()) {
             QLabel *l = new QLabel(i18n("The last update failed: %1").arg(error), w);
             l->setAlignment(Qt::WordBreak);
@@ -473,12 +365,69 @@ void ForecastPopup::hideEvent(QHideEvent *e)
     emit hidden();
 }
 
+void ForecastPopup::showDay()
+{
+    if (!m_chart || m_dates.isEmpty())
+        return;
+    QDate date = m_dates[QMIN(m_day, int(m_dates.count()) - 1)];
+    bool today = date <= m_today;
+    m_chart->setHours(m_service->dayHours(m_location,
+                                          today ? QString::null : date.toString(Qt::ISODate)));
+    updateCaption();
+}
+
+void ForecastPopup::updateCaption()
+{
+    if (!m_dayCaption || m_dates.isEmpty())
+        return;
+    QDate date = m_dates[QMIN(m_day, int(m_dates.count()) - 1)];
+    QString day = date <= m_today ? i18n("Next 24 hours")
+                : KGlobal::locale()->formatDate(date, false);
+    QString unit = m_chart->unit();
+    m_dayCaption->setText(unit.isEmpty() ? day : i18n("day and unit", "%1 \xc2\xb7 %2").arg(day).arg(unit));
+}
+
+void ForecastPopup::slotDay(int index)
+{
+    m_day = index;
+    showDay();
+}
+
+void ForecastPopup::slotKind(int kind)
+{
+    m_kind = kind;
+    if (m_chart)
+        m_chart->setKind(kind);
+    updateCaption();
+}
+
 void ForecastPopup::keyPressEvent(QKeyEvent *e)
 {
-    if (e->key() == Qt::Key_Escape)
+    switch (e->key()) {
+    case Qt::Key_Escape:
         close();
-    else
+        break;
+    case Qt::Key_Left:
+    case Qt::Key_Right:
+        // the previous or next day
+        if (m_strip && m_strip->count()) {
+            int day = m_strip->current() + (e->key() == Qt::Key_Left ? -1 : 1);
+            m_strip->setCurrent(day);
+            slotDay(m_strip->current());
+        }
+        break;
+    case Qt::Key_Up:
+    case Qt::Key_Down:
+        // the previous or next chart
+        if (m_tabs) {
+            int kind = (m_kind + (e->key() == Qt::Key_Up ? 2 : 1)) % 3;
+            m_tabs->setCurrentTab(kind);
+            slotKind(kind);
+        }
+        break;
+    default:
         QFrame::keyPressEvent(e);
+    }
 }
 
 #include "forecastpopup.moc"
