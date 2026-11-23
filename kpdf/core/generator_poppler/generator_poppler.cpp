@@ -789,6 +789,32 @@ KPDFTextPage * PopplerGenerator::textPage( int pageNumber )
             }
         }
         rects.resize( 4 * n );
+
+        // the layout gives the boxes of a right to left run (between the
+        // marks U+202B and U+202C that poppler puts around it) in visual
+        // order, the text is in logical order: turn the boxes round
+        uint runStart = 0;
+        bool inRun = false;
+        for ( uint k = 0; k < n; ++k )
+        {
+            ushort ch = text[k].unicode();
+            if ( ch == 0x202b || ch == 0x202e )
+            {
+                inRun = true;
+                runStart = k + 1;
+            }
+            else if ( ch == 0x202c && inRun )
+            {
+                for ( uint a = runStart, b = k; b > a + 1; ++a, --b )
+                    for ( int c = 0; c < 4; ++c )
+                    {
+                        float tmp = rects[4*a+c];
+                        rects[4*a+c] = rects[4*(b-1)+c];
+                        rects[4*(b-1)+c] = tmp;
+                    }
+                inRun = false;
+            }
+        }
     }
     g_free( boxes );
     g_free( utf8 );
