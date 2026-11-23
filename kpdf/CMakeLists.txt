@@ -45,3 +45,8 @@ install(FILES part.rc DESTINATION ${KDE3_DATA_INSTALL_DIR}/kpdfpart)
 kde3_install_icons(kpdf)
 
 add_subdirectory(shell)
+
+option(KDE3_APPS_KPDF_TESTS "Build kpdfcheck, a test driver of KPDF's document core (not installed)" OFF)
+if(KDE3_APPS_KPDF_TESTS)
+  add_subdirectory(tests)
+endif()

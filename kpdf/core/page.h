@@ -106,6 +106,7 @@ class KPDFPage
         const QString getText( const NormalizedRect & rect ) const;
         const KPDFTextPage * textPage() const { return m_text; }
         const ObjectRect * hasObject( ObjectRect::ObjectType type, double x, double y ) const;
+        const QValueList< ObjectRect * > & objectRects() const { return m_rects; }
         //const Annotation * getAnnotation( double x, double y ) const;
         const KPDFPageTransition * getTransition() const;
 
