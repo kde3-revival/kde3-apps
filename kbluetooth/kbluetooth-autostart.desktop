@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=kbluetooth
+GenericName=Bluetooth
+Comment=Bluetooth devices in the system tray
+Exec=kbluetooth
+Icon=kbluetooth
+Terminal=false
+X-KDE-StartupNotify=false
+X-DCOP-ServiceType=Unique
+X-KDE-autostart-phase=2
+X-KDE-autostart-condition=kbluetoothrc:General:Autostart:true
+OnlyShowIn=KDE;

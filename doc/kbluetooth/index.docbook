@@ -1,0 +1,120 @@
+<?xml version="1.0" ?>
+<!DOCTYPE book PUBLIC "-//KDE//DTD DocBook XML V4.2-Based Variant V1.1//EN" "dtd/kdex.dtd" [
+  <!ENTITY kappname "kbluetooth">
+  <!ENTITY package "kde3-apps">
+  <!ENTITY % English "INCLUDE">
+  <!ENTITY % addindex "IGNORE">
+]>
+
+<book lang="&language;">
+
+<bookinfo>
+<title>The kbluetooth Handbook</title>
+
+<authorgroup>
+<author><othername>The KDE3 revival developers</othername></author>
+<!-- TRANS:ROLES_OF_TRANSLATORS -->
+</authorgroup>
+
+<legalnotice>&FDLNotice;</legalnotice>
+
+<date>2026-11-23</date>
+<releaseinfo>0.1</releaseinfo>
+
+<abstract>
+<para>kbluetooth shows the Bluetooth adapter and devices in the system
+tray. It switches Bluetooth on and off, connects and disconnects paired
+devices, and finds and pairs new ones. It talks to BlueZ 5
+(<command>bluetoothd</command>) over the system D-Bus.</para>
+</abstract>
+
+<keywordset>
+<keyword>KDE</keyword>
+<keyword>Bluetooth</keyword>
+<keyword>BlueZ</keyword>
+<keyword>kbluetooth</keyword>
+</keywordset>
+
+</bookinfo>
+
+<chapter id="introduction">
+<title>Using kbluetooth</title>
+
+<para>kbluetooth starts with the session and puts an icon in the system
+tray. The icon is grey when Bluetooth is off, blocked or missing, blue
+when it is on, and blue with a green dot when a device is connected. The
+tooltip names the connected devices and their battery charge, when the
+device reports it.</para>
+
+<sect1 id="popup">
+<title>The popup</title>
+<para>A click with the left mouse button opens the popup: the
+<guilabel>Bluetooth on</guilabel> switch of the adapter, the paired
+devices and <guibutton>Scan for Devices...</guibutton>. A click on a device
+connects it, or disconnects it when it is connected; a click with the right
+mouse button opens the menu of the device. The tooltip of a device shows
+its address and the profiles (services) it offers.</para>
+<para>When Bluetooth cannot be used the popup says why: no adapter, the
+Bluetooth service <command>bluetoothd</command> is not running, or the
+radio is blocked (rfkill). A block by a hardware switch or key is lifted
+with that switch or key. A software block needs administrator rights,
+for example <userinput><command>rfkill unblock bluetooth</command></userinput>;
+kbluetooth does not lift it itself.</para>
+</sect1>
+
+<sect1 id="pairing">
+<title>Pairing a device</title>
+<para><guibutton>Scan for Devices...</guibutton> opens a window that looks
+for devices while it is open. Switch the device to pairing mode, select it
+and press <guibutton>Pair</guibutton>. Depending on the device kbluetooth
+asks to compare a passkey, to type a PIN code, or shows a PIN or passkey to
+type on the device. A paired device is trusted and connected.</para>
+<para>kbluetooth is the pairing agent of BlueZ: it also asks when a
+device pairs from its side, or when a device that is not trusted wants to
+use a service.</para>
+<para>Audio devices need nothing more: when a headset or speaker is
+connected, BlueZ and the sound server (PipeWire or PulseAudio) offer it as
+a sound device.</para>
+</sect1>
+
+<sect1 id="menu">
+<title>The menu</title>
+<para>The menu of the right mouse button has the power switch, a submenu
+for each paired device (<guimenuitem>Connect</guimenuitem> or
+<guimenuitem>Disconnect</guimenuitem>, <guimenuitem>Rename...</guimenuitem>,
+<guimenuitem>Trusted</guimenuitem>, <guimenuitem>Remove...</guimenuitem>,
+which deletes the pairing), the adapter to use when there are several, and
+the settings:</para>
+<itemizedlist>
+<listitem><para><guimenuitem>Show the Icon Without an Adapter</guimenuitem>:
+off hides the icon while there is no adapter; it comes back with the
+adapter, or when kbluetooth is started again.</para></listitem>
+<listitem><para><guimenuitem>Switch Bluetooth On at Login</guimenuitem>:
+switches the adapter on once when kbluetooth starts or the adapter
+appears.</para></listitem>
+<listitem><para><guimenuitem>Start kbluetooth at Login</guimenuitem>.</para></listitem>
+</itemizedlist>
+<para>The notifications (device connected, disconnected, errors) are set
+in the Control Center, under Notifications.</para>
+</sect1>
+
+<sect1 id="testing">
+<title>Testing</title>
+<para>kbluetooth uses the system bus that <envar>DBUS_SYSTEM_BUS_ADDRESS</envar>
+names, when it is set, and reads the rfkill state from the directory
+<envar>KBLUETOOTH_RFKILL_DIR</envar> instead of
+<filename>/sys/class/rfkill</filename>. Both are meant for tests against a
+mock BlueZ on a private bus.</para>
+</sect1>
+
+<sect1 id="credits">
+<title>Credits and License</title>
+<para>kbluetooth was written for the KDE3 revival.</para>
+&underFDL;
+&underGPL;
+</sect1>
+
+</chapter>
+
+&documentation.index;
+</book>

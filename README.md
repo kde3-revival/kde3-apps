@@ -43,6 +43,12 @@ From KDE 3.5.10 kdetoys:
 The DCOP service of KWeather names a location `latitude,longitude,model`
 instead of the METAR station code of KDE 3.5; see its handbook.
 
+New applications of the revival:
+
+| Directory     | Application    | What it is                                                      |
+|---------------|----------------|-----------------------------------------------------------------|
+| `kbluetooth/` | kbluetooth     | Bluetooth applet of the system tray on BlueZ 5: power, connect, pair (with its pairing agent) |
+
 The handbook of each application is in `doc/<application>/`
 (`doc/kinfocenter/blockdevices/` belongs to KDiskFree).
 
@@ -56,10 +62,14 @@ Dependencies:
   (`/opt/kde3`), the compiler flags and the RUNPATH
 - X11 with libXext (KSnapshot uses the X Shape extension)
 - GMP (KCalc)
+- GIO (gio-2.0, part of GLib) for kbluetooth, which talks to BlueZ over
+  the system D-Bus with GDBus
 
 At run time Ark calls the command line archivers it finds (tar, gzip,
 bzip2, xz, zstd, lz4, zip/unzip, 7z/7zz, rar/unrar, lha, ...), and KDiskFree
-mounts and unmounts through `udisksctl` when it is installed.
+mounts and unmounts through `udisksctl` when it is installed.  kbluetooth
+needs BlueZ 5 (`bluetoothd`) at run time; the sound of Bluetooth headsets
+and speakers is the business of BlueZ and PipeWire (or PulseAudio).
 
 Build and install:
 
@@ -82,6 +92,7 @@ Options (all `ON` by default):
 | `KDE3_APPS_KVIEW`            | KView                                                     |
 | `KDE3_APPS_KRULER`           | KRuler                                                    |
 | `KDE3_APPS_KSNAPSHOT`        | KSnapshot                                                 |
+| `KDE3_APPS_KBLUETOOTH`       | kbluetooth (needs GIO; the configuration stops if it is missing) |
 | `KDE3_APPS_KSNAPSHOT_XSHAPE` | KSnapshot cuts non-rectangular windows to their shape (X Shape extension; the configuration stops if it is missing) |
 
 The handbook of an application is built with it.  To build a single
@@ -90,7 +101,8 @@ application, switch the others off, for example KCalc only:
     cmake -S . -B build-kcalc -G Ninja -DCMAKE_PREFIX_PATH=/opt/kde3 \
           -DKDE3_APPS_ARK=OFF -DKDE3_APPS_KCHARSELECT=OFF -DKDE3_APPS_KDF=OFF \
           -DKDE3_APPS_KHEXEDIT=OFF -DKDE3_APPS_KTIMER=OFF -DKDE3_APPS_KWALLET=OFF \
-          -DKDE3_APPS_KVIEW=OFF -DKDE3_APPS_KRULER=OFF -DKDE3_APPS_KSNAPSHOT=OFF
+          -DKDE3_APPS_KVIEW=OFF -DKDE3_APPS_KRULER=OFF -DKDE3_APPS_KSNAPSHOT=OFF \
+          -DKDE3_APPS_KWEATHER=OFF -DKDE3_APPS_KBLUETOOTH=OFF
 
 ## Other kde3-revival repositories
 
@@ -123,6 +135,9 @@ As stated in the source files:
   version 2 or later; `ksnapshot.cpp`, `quickshot.cpp` and `quickshot.h`
   say "Released under the LGPL" without a version; the other files have no
   licence header.  Its About dialog says GPL.
+- kbluetooth is under the GPL, version 2 or later; its icons were drawn
+  for it (SVG sources in `kbluetooth/icon-src/`) and are under the same
+  licence.
 - Libraries under the GNU Library General Public License (LGPL):
   `kcalc/knumber/` (version 2 or later), `khexedit/lib/` and
   `khexedit/parts/` (the KHexEdit2 widget library and its KPart, version 2),

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=kbluetooth
+GenericName=Bluetooth
+Comment=Bluetooth devices in the system tray: switch on, connect, pair
+Exec=kbluetooth
+Icon=kbluetooth
+DocPath=kbluetooth/index.html
+Terminal=false
+X-KDE-StartupNotify=false
+X-DCOP-ServiceType=Unique
+Categories=Qt;KDE;System;Settings;HardwareSettings;

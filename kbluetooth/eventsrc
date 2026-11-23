@@ -1,0 +1,18 @@
+[!Global!]
+IconName=kbluetooth
+Comment=kbluetooth
+
+[connected]
+Name=Device connected
+Comment=A Bluetooth device is connected
+default_presentation=16
+
+[disconnected]
+Name=Device disconnected
+Comment=A Bluetooth device is disconnected
+default_presentation=16
+
+[error]
+Name=Bluetooth error
+Comment=An action on a Bluetooth device or adapter failed
+default_presentation=16
