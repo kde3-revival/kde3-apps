@@ -664,7 +664,12 @@ QImage * PopplerGenerator::renderPage( int pageNumber, int width, int height )
     poppler_page_get_size( page, &w, &h );
     if ( w > 0 && h > 0 )
         cairo_scale( cr, width / w, height / h );
+    // the page is a group on a transparent backdrop, put on the paper
+    // afterwards: blend modes must not mix with the paper colour
+    cairo_push_group( cr );
     poppler_page_render( page, cr );
+    cairo_pop_group_to_source( cr );
+    cairo_paint( cr );
     cairo_destroy( cr );
     cairo_surface_flush( surface );
     cairo_surface_destroy( surface );
