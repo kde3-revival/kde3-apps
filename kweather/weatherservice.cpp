@@ -236,6 +236,10 @@ void WeatherService::removeStation(const QString &stationID)
 
 void WeatherService::addStation(const QString &stationID)
 {
+	double lat, lon;
+	QString m;
+	if (!WeatherModels::parseLocationId(stationID, &lat, &lon, &m))
+		return;
 	m_weatherLib->update(stationID);
 	saveSettings();
 }
@@ -243,6 +247,10 @@ void WeatherService::addStation(const QString &stationID)
 void WeatherService::addLocation(const QString &stationID, const QString &name,
                                  const QString &country)
 {
+	double lat, lon;
+	QString m;
+	if (!WeatherModels::parseLocationId(stationID, &lat, &lon, &m))
+		return;
 	KConfig *conf = m_config;
 	conf->setGroup("Location " + stationID);
 	conf->writeEntry("name", name);
@@ -335,6 +343,44 @@ QString WeatherService::sunRiseTime(const QString &stationID)
 QString WeatherService::sunSetTime(const QString &stationID)
 {
 	return m_weatherLib->sunSet(stationID);
+}
+
+QString WeatherService::localDate(const QString &stationID)
+{
+	return m_weatherLib->localDate(stationID);
+}
+
+QString WeatherService::visibility(const QString &)
+{
+	return QString::null;
+}
+
+QStringList WeatherService::findStations(float, float)
+{
+	return QStringList();
+}
+
+QString WeatherService::civilTwilightStart(const QString &)
+{
+	return QString::null;
+}
+
+QString WeatherService::civilTwilightEnd(const QString &)
+{
+	return QString::null;
+}
+
+QString WeatherService::stationCode(const QString &stationName)
+{
+	QStringList groups = m_config->groupList();
+	for (QStringList::ConstIterator it = groups.begin(); it != groups.end(); ++it) {
+		if (!(*it).startsWith("Location "))
+			continue;
+		m_config->setGroup(*it);
+		if (m_config->readEntry("name") == stationName)
+			return (*it).mid(9);
+	}
+	return QString::null;
 }
 
 #include "weatherservice.moc"

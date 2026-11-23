@@ -13,6 +13,8 @@
 
 #include <klocale.h>
 
+#include <math.h>
+
 namespace
 {
 
@@ -84,7 +86,9 @@ bool WeatherModels::parseLocationId(const QString &id, double *latitude,
     bool okLat = false, okLon = false;
     double lat = c.toDouble(parts[0], &okLat);
     double lon = c.toDouble(parts[1], &okLon);
-    if (!okLat || !okLon || lat < -90 || lat > 90 || lon < -180 || lon > 180)
+    // QLocale::toDouble() takes "nan" and "inf"
+    if (!okLat || !okLon || !isfinite(lat) || !isfinite(lon)
+        || lat < -90 || lat > 90 || lon < -180 || lon > 180)
         return false;
     if (!isKnown(parts[2]))
         return false;

@@ -40,6 +40,9 @@ From KDE 3.5.10 kdetoys:
 |---------------|----------------|-----------------------------------------------------------------|
 | `kweather/`   | KWeather       | Weather applet of the panel and DCOP weather service, forecasts from Open-Meteo |
 
+The DCOP service of KWeather names a location `latitude,longitude,model`
+instead of the METAR station code of KDE 3.5; see its handbook.
+
 The handbook of each application is in `doc/<application>/`
 (`doc/kinfocenter/blockdevices/` belongs to KDiskFree).
 

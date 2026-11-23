@@ -151,6 +151,17 @@ Besides the current weather (<function>temperature</function>,
 <function>hourlyForecast</function>, <function>dailyForecast</function>
 and <function>rainNextHour</function>; <filename>weatherservice.h</filename>
 describes them.</para>
+
+<note><para>Programs written for KWeather 3.5 named the weather
+stations by their four-letter METAR codes (such as LRBS).  These codes
+are not locations any more: the calls answer them with empty values.
+The calls that only made sense for METAR reports,
+<function>visibility</function>, <function>findStations</function>,
+<function>civilTwilightStart</function> and
+<function>civilTwilightEnd</function>, are still there and answer
+empty values; <function>stationCode</function> gives the location of a
+place by the name it was added with
+(<function>addLocation</function>).</para></note>
 </chapter>
 
 <chapter id="credits-and-licenses">

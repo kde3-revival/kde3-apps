@@ -101,6 +101,8 @@ class WeatherService : public QObject, public DCOPObject
 
 		QString sunRiseTime(const QString &stationID);
 		QString sunSetTime(const QString &stationID);
+		/** Today at the location (ISO 8601), which may not be today here. */
+		QString localDate(const QString &stationID);
 
 		/**
 		 * The next @p hours hours, one entry per hour:
@@ -130,6 +132,21 @@ class WeatherService : public QObject, public DCOPObject
 		void reloadSettings();
 
 		void exit();
+
+		// Calls of KWeather 3.5 without a meaning for Open-Meteo, kept so
+		// that old clients get an answer instead of a failed call.  Their
+		// station IDs (METAR codes) are not locations any more.
+		/** Deprecated: empty (METAR visibility). */
+		QString visibility(const QString &stationID);
+		/** Deprecated: empty (needed a station database). */
+		QStringList findStations(float lon, float lat);
+		/** Deprecated: empty. */
+		QString civilTwilightStart(const QString &stationID);
+		/** Deprecated: empty. */
+		QString civilTwilightEnd(const QString &stationID);
+		/** The location key of a place added with addLocation(), by its
+		    name; empty if there is none. */
+		QString stationCode(const QString &stationName);
 
   private:
 		void saveSettings();
