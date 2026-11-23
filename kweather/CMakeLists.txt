@@ -24,11 +24,13 @@ kde3_add_module(weather_panelapplet
 kde3_add_module(kcm_weather
   SOURCES
     kcmweather.cpp
+    download.cpp
     json.cpp
     weathermodels.cpp
     weatherservice.stub
   MOC
     kcmweather.h
+    download.h
   LINK
     KDE3::kio
 )
@@ -37,13 +39,16 @@ kde3_add_module(kcm_weather
 kde3_add_executable(kweatherservice
   SOURCES
     main.cpp
+    download.cpp
     json.cpp
+    localtime.cpp
     weatherlib.cpp
     weathericons.cpp
     weathermodels.cpp
     weatherservice.cpp
     weatherservice.skel
   MOC
+    download.h
     weatherlib.h
     weatherservice.h
   LINK

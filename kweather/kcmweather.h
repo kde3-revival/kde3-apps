@@ -40,10 +40,7 @@ class KLineEdit;
 class KURLRequester;
 class WeatherService_stub;
 
-namespace KIO
-{
-  class Job;
-}
+class Download;
 
 class KCMWeather : public KCModule
 {
@@ -60,7 +57,7 @@ class KCMWeather : public KCModule
   private slots:
     void enableLogWidgets( bool value );
     void searchLocation();
-    void searchDone( KIO::Job *job );
+    void searchDone( Download *download, const QByteArray &data, const QString &error );
     void locationSelected( int index );
     void configChanged();
 
@@ -98,7 +95,7 @@ class KCMWeather : public KCModule
     QLabel *mLogLabel;
     KURLRequester *mLogFile;
 
-    KIO::Job *mSearchJob;
+    Download *mSearchJob;
     QValueList<Place> mPlaces;
     Place mLocation;
     bool mHaveLocation;

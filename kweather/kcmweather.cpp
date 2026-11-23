@@ -44,13 +44,15 @@
 #include <kdebug.h>
 #include <kdialog.h>
 #include <kglobal.h>
-#include <kio/job.h>
 #include <klineedit.h>
 #include <klocale.h>
 #include <kurl.h>
 #include <kurlrequester.h>
 
+#include <math.h>
+
 #include "dockwidget.h"
+#include "download.h"
 #include "json.h"
 #include "kcmweather.h"
 #include "weathermodels.h"
@@ -194,7 +196,7 @@ KCMWeather::KCMWeather( QWidget *parent, const char *name )
 KCMWeather::~KCMWeather()
 {
   if ( mSearchJob )
-    mSearchJob->kill();
+    mSearchJob->abort();
   delete mWeatherService;
 }
 
@@ -250,7 +252,7 @@ void KCMWeather::searchLocation()
   if ( text.isEmpty() )
     return;
   if ( mSearchJob )
-    mSearchJob->kill();
+    mSearchJob->abort();
 
   QString language = KGlobal::locale()->language().left( 2 );
   KConfig service( "kweatherservicerc", true );
@@ -259,31 +261,33 @@ void KCMWeather::searchLocation()
   url.setQuery( "name=" + KURL::encode_string( text, 106 /* UTF-8 */ )
                 + "&count=20&format=json&language=" + KURL::encode_string( language ) );
   kdDebug() << "Geocoding " << url.url() << endl;
-  mSearchJob = KIO::storedGet( url, true, false );
-  // as in WeatherLib::startJob(): kio_http cannot inflate HTTP's deflate
-  mSearchJob->addMetaData( "AllowCompressedPage", "false" );
-  connect( mSearchJob, SIGNAL( result( KIO::Job* ) ), SLOT( searchDone( KIO::Job* ) ) );
+  // 20 places are about 10 KiB
+  mSearchJob = new Download( url, 256 * 1024, 30, this );
+  connect( mSearchJob, SIGNAL( finished( Download*, const QByteArray&, const QString& ) ),
+           SLOT( searchDone( Download*, const QByteArray&, const QString& ) ) );
   mResults->clear();
   mPlaces.clear();
   mResults->insertItem( i18n( "Searching..." ) );
   mResults->setEnabled( false );
 }
 
-void KCMWeather::searchDone( KIO::Job *job )
+void KCMWeather::searchDone( Download *download, const QByteArray &data,
+                             const QString &error )
 {
-  if ( job != mSearchJob )
+  if ( download != mSearchJob )
     return;
   mSearchJob = 0;
   mResults->clear();
   mPlaces.clear();
+  mResults->setEnabled( true );
 
-  if ( job->error() )
+  if ( !error.isEmpty() )
   {
-    mResults->insertItem( i18n( "The search failed: %1" ).arg( job->errorString() ) );
+    mResults->insertItem( i18n( "The search failed: %1" ).arg( error ) );
     return;
   }
   bool ok = false;
-  QVariant root = Json::parse( static_cast<KIO::StoredTransferJob*>( job )->data(), &ok );
+  QVariant root = Json::parse( data, &ok );
   QVariant results = Json::member( root, "results" );
   if ( !ok || results.type() != QVariant::List || results.toList().isEmpty() )
   {
@@ -299,17 +303,23 @@ void KCMWeather::searchDone( KIO::Job *job )
     p.country = Json::member( *it, "country" ).toString();
     p.latitude = Json::number( Json::member( *it, "latitude" ), 1000 );
     p.longitude = Json::number( Json::member( *it, "longitude" ), 1000 );
-    if ( p.name.isEmpty() || p.latitude > 90 || p.longitude > 180 )
+    if ( p.name.isEmpty() || !isfinite( p.latitude ) || !isfinite( p.longitude )
+         || p.latitude < -90 || p.latitude > 90
+         || p.longitude < -180 || p.longitude > 180 )
       continue;
+    p.name = p.name.left( 100 );
+    p.country = p.country.left( 100 );
     QStringList parts;
     parts.append( p.name );
-    QString admin = Json::member( *it, "admin1" ).toString();
+    QString admin = Json::member( *it, "admin1" ).toString().left( 100 );
     if ( !admin.isEmpty() && admin != p.name )
       parts.append( admin );
     if ( !p.country.isEmpty() )
       parts.append( p.country );
     QString text = parts.join( ", " );
     double elevation = Json::number( Json::member( *it, "elevation" ), -10000 );
+    if ( !isfinite( elevation ) || elevation > 10000 )
+      elevation = -10000;
     text += " (" + KGlobal::locale()->formatNumber( p.latitude, 2 ) + ", "
           + KGlobal::locale()->formatNumber( p.longitude, 2 );
     if ( elevation > -1000 )

@@ -19,23 +19,21 @@
 #ifndef WEATHERLIB_H
 #define WEATHERLIB_H
 
+#include <qcstring.h>
 #include <qdict.h>
 #include <qmap.h>
 #include <qobject.h>
 #include <qstring.h>
 #include <qstringlist.h>
 
-namespace KIO
-{
-	class Job;
-}
+class Download;
 
 /**
  * The weather of the locations, from the forecast API of Open-Meteo
  * (https://open-meteo.com/, no account or key).  A location is a key
  * "<latitude>,<longitude>,<model>" (see WeatherModels::locationId());
  * only its coordinates and the model are sent.  The values are returned
- * as text in the units of setUnits().
+ * as text, in the units they were downloaded in (see setUnits()).
  */
 class WeatherLib : public QObject
 {
@@ -43,6 +41,12 @@ class WeatherLib : public QObject
 
 	public:
 		class Data;
+		struct Units
+		{
+			QString temperature;	// celsius, fahrenheit
+			QString wind;		// kmh, ms, mph, kn
+			QString precipitation;	// mm, inch
+		};
 
 		WeatherLib(QObject *parent =0L, const char *name =0L);
 		virtual ~WeatherLib();
@@ -51,7 +55,8 @@ class WeatherLib : public QObject
 		void setServer(const QString &url);
 
 		/** "celsius"/"fahrenheit", "kmh"/"ms"/"mph"/"kn",
-		    "mm"/"inch", "hPa"/"inHg"; refetches when they change. */
+		    "mm"/"inch", "hPa"/"inHg"; downloads again when they change.
+		    Until the new data is there, the old keeps its units. */
 		void setUnits(const QString &temperature, const QString &wind,
 		              const QString &precipitation, const QString &pressure);
 
@@ -66,6 +71,7 @@ class WeatherLib : public QObject
 		QString precipitation(const QString &id);
 		QString iconName(const QString &id);
 		QString date(const QString &id);
+		QString localDate(const QString &id);
 		QStringList weather(const QString &id);
 		QStringList cover(const QString &id);
 		QString sunRise(const QString &id);
@@ -88,23 +94,28 @@ class WeatherLib : public QObject
 		void stationRemoved(const QString &id);
 
 	private slots:
-		void slotJobDone(KIO::Job*);
+		void slotDownloadDone(Download *download, const QByteArray &data,
+		                      const QString &error);
 
 	private:
+		struct Request
+		{
+			QString id;
+			bool current;
+			bool hourly;
+			bool daily;
+			Units units;
+		};
+
 		Data* findData(const QString &id);
 		void getData(Data *d, bool force = false);
 		void startJob(Data *d, const QString &model, bool current,
 		              bool hourly, bool daily);
-		QString formatTemperature(double value) const;
-		QString formatTime(const Data *d, long time) const;
-		QString formatPrecipitation(double value) const;
 
 		QDict<Data> m_data;
 		QString m_server;
-		QMap<KIO::Job*, QString> m_jobs;
-		QString m_tempUnit;
-		QString m_windUnit;
-		QString m_precipUnit;
+		QMap<Download*, Request> m_jobs;
+		Units m_units;
 		QString m_pressureUnit;
 };
 
