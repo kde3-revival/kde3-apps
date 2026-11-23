@@ -613,6 +613,37 @@ void Bluez::setAlias(const QString &devicePath, const QString &alias)
     setProperty(devicePath, deviceInterface, "Alias", g_variant_new_string(alias.utf8()), SetAlias);
 }
 
+QString Bluez::errorText(const QString &name, const QString &message)
+{
+    // the reasons of Connect in BlueZ 5.5x (src/error.h), then the names
+    if (message == "br-connection-profile-unavailable" || message == "le-connection-profile-unavailable")
+        return i18n("the device offers no service this computer can use");
+    if (message.startsWith("br-connection-page-timeout") || message == "Page Timeout"
+        || message == "le-connection-abort-by-local")
+        return i18n("the device does not answer (out of range or switched off?)");
+    if (message.startsWith("br-connection-canceled") || message.startsWith("le-connection-canceled"))
+        return i18n("canceled");
+    if (message.startsWith("br-connection-busy") || message == "br-connection-already-connected")
+        return i18n("the device is busy");
+    if (message.startsWith("br-connection-key-missing"))
+        return i18n("the device forgot the pairing; remove it and pair it again");
+    if (message.contains("rfkill") || name == "org.bluez.Error.Blocked")
+        return i18n("Bluetooth is blocked (rfkill)");
+    if (name == "org.bluez.Error.NotReady")
+        return i18n("Bluetooth is off");
+    if (name == "org.bluez.Error.AuthenticationCanceled" || name == "org.bluez.Error.Canceled")
+        return i18n("canceled");
+    if (name == "org.bluez.Error.AuthenticationRejected" || name == "org.bluez.Error.Rejected")
+        return i18n("rejected");
+    if (name == "org.bluez.Error.AuthenticationFailed")
+        return i18n("wrong PIN or passkey");
+    if (name == "org.bluez.Error.AuthenticationTimeout" || name == "org.freedesktop.DBus.Error.NoReply")
+        return i18n("no answer from the device");
+    if (name == "org.bluez.Error.ConnectionAttemptFailed")
+        return i18n("the device cannot be reached");
+    return message;
+}
+
 QString Bluez::profileName(const QString &uuid)
 {
     // the 16 bit UUIDs on the Bluetooth base UUID

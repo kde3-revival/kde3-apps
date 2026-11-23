@@ -29,22 +29,6 @@ static const char stateConnecting[] = "connecting";
 static const char stateDone[] = "done";
 static const char stateFailed[] = "failed";
 
-// a text for the errors of Pair the user can do something about
-static QString pairError(const QString &name, const QString &error)
-{
-    if (name == "org.bluez.Error.AuthenticationCanceled" || name == "org.bluez.Error.Canceled")
-        return i18n("Canceled");
-    if (name == "org.bluez.Error.AuthenticationRejected" || name == "org.bluez.Error.Rejected")
-        return i18n("Rejected");
-    if (name == "org.bluez.Error.AuthenticationFailed")
-        return i18n("Wrong PIN or passkey");
-    if (name == "org.bluez.Error.AuthenticationTimeout" || name == "org.freedesktop.DBus.Error.NoReply")
-        return i18n("No answer from the device");
-    if (name == "org.bluez.Error.ConnectionAttemptFailed")
-        return i18n("The device cannot be reached");
-    return error;
-}
-
 ScanDialog::ScanDialog(BluetoothTray *tray)
     : KDialogBase(0, "scandialog", false, i18n("Bluetooth Devices"),
                   User1 | Close, User1, true, KGuiItem(i18n("&Pair"), "connect_creating")),
@@ -67,7 +51,7 @@ ScanDialog::ScanDialog(BluetoothTray *tray)
     m_list->addColumn(i18n("Status"));
     m_list->setAllColumnsShowFocus(true);
     m_list->setSorting(0);
-    m_list->setMinimumSize(460, 220);
+    m_list->setMinimumSize(600, 220);
     layout->addWidget(m_list, 1);
 
     m_status = new QLabel(page);
@@ -82,7 +66,10 @@ ScanDialog::ScanDialog(BluetoothTray *tray)
     connect(bluez, SIGNAL(callFinished(const QString &, int, const QString &, const QString &)),
             SLOT(callFinished(const QString &, int, const QString &, const QString &)));
     connect(m_list, SIGNAL(selectionChanged()), SLOT(selectionChanged()));
-    connect(m_list, SIGNAL(executed(QListViewItem *)), SLOT(executed(QListViewItem *)));
+    // a double click pairs; a single click (executed() in the single
+    // click mode of KDE) only selects
+    connect(m_list, SIGNAL(doubleClicked(QListViewItem *, const QPoint &, int)),
+            SLOT(executed(QListViewItem *)));
 
     selectionChanged();
 }
@@ -289,7 +276,7 @@ void ScanDialog::callFinished(const QString &path, int operation,
             Bluez::self()->setTrusted(path, true);
         } else {
             m_state[path] = QString::fromLatin1("%1:%2").arg(stateFailed)
-                            .arg(i18n("Pairing failed: %1").arg(pairError(errorName, error)));
+                            .arg(i18n("Pairing failed: %1").arg(Bluez::errorText(errorName, error)));
         }
     } else if (operation == Bluez::SetTrusted && state == stateTrusting) {
         // connect even when trusting failed: the pairing is there
@@ -300,7 +287,8 @@ void ScanDialog::callFinished(const QString &path, int operation,
             m_state[path] = stateDone;
         else
             m_state[path] = QString::fromLatin1("%1:%2").arg(stateFailed)
-                            .arg(i18n("Paired; connecting failed: %1").arg(error));
+                            .arg(i18n("Paired; connecting failed: %1")
+                                 .arg(Bluez::errorText(errorName, error)));
     } else {
         return;
     }

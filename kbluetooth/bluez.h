@@ -98,6 +98,9 @@ public:
     // The connection, a GDBusConnection *, for the agent; 0 before it is up
     void *connection() const { return m_connection; }
 
+    // A readable text for an error of BlueZ
+    static QString errorText(const QString &errorName, const QString &message);
+
     // Names for the profile UUIDs a device announces
     static QString profileName(const QString &uuid);
 

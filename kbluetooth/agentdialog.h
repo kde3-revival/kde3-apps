@@ -47,8 +47,6 @@ signals:
     void answered(bool accepted, const QString &text, bool always);
 
 protected slots:
-    virtual void slotYes();
-    virtual void slotNo();
     virtual void slotOk();
     virtual void slotCancel();
     virtual void slotClose();

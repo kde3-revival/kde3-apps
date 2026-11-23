@@ -240,9 +240,7 @@ void BluetoothTray::callFinished(const QString &path, int operation,
         m_busy.remove(path);
     if (!error.isEmpty() && operation != Bluez::CancelPairing
         && operation != Bluez::StartDiscovery && operation != Bluez::StopDiscovery) {
-        QString text = error;
-        if (errorName == "org.bluez.Error.Blocked" || error.contains("rfkill"))
-            text = i18n("Bluetooth is blocked (rfkill).");
+        QString text = Bluez::errorText(errorName, error);
         m_errors[path] = text;
         BluezDevice d;
         BluezAdapter a;

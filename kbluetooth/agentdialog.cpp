@@ -31,7 +31,6 @@ static int buttonsFor(AgentDialog::Kind kind)
     case AgentDialog::Confirm:
     case AgentDialog::Authorize:
     case AgentDialog::AuthorizeService:
-        return KDialogBase::Yes | KDialogBase::No;
     case AgentDialog::PinCode:
     case AgentDialog::Passkey:
         return KDialogBase::Ok | KDialogBase::Cancel;
@@ -45,8 +44,6 @@ static int buttonsFor(AgentDialog::Kind kind)
 static KDialogBase::ButtonCode defaultFor(AgentDialog::Kind kind)
 {
     int buttons = buttonsFor(kind);
-    if (buttons & KDialogBase::Yes)
-        return KDialogBase::Yes;
     if (buttons & KDialogBase::Ok)
         return KDialogBase::Ok;
     return KDialogBase::Cancel;
@@ -138,15 +135,15 @@ AgentDialog::AgentDialog(Kind kind, const QString &devicePath, const QString &de
     }
     box->addStretch();
 
-    if (buttonsFor(kind) & Yes) {
-        if (kind == Confirm) {
-            setButtonGuiItem(Yes, KGuiItem(i18n("&Pair"), "button_ok"));
-            setButtonGuiItem(No, KGuiItem(i18n("&Reject"), "button_cancel"));
-        } else {
-            setButtonGuiItem(Yes, KGuiItem(i18n("&Allow"), "button_ok"));
-            setButtonGuiItem(No, KGuiItem(i18n("&Deny"), "button_cancel"));
-        }
+    if (kind == Confirm) {
+        setButtonGuiItem(Ok, KGuiItem(i18n("&Pair"), "button_ok"));
+        setButtonGuiItem(Cancel, KGuiItem(i18n("&Reject"), "button_cancel"));
+    } else if (kind == Authorize || kind == AuthorizeService) {
+        setButtonGuiItem(Ok, KGuiItem(i18n("&Allow"), "button_ok"));
+        setButtonGuiItem(Cancel, KGuiItem(i18n("&Deny"), "button_cancel"));
     }
+    // room for the passkey and the name of the device
+    label->setMinimumWidth(320);
     if (kind == DisplayPinCode || kind == DisplayPasskey)
         setButtonGuiItem(Cancel, KGuiItem(i18n("&Cancel Pairing"), "button_cancel"));
 
@@ -177,18 +174,6 @@ void AgentDialog::answer(bool accepted)
     m_answered = true;
     emit answered(accepted, m_edit ? m_edit->text() : QString::null,
                   m_always && m_always->isChecked());
-}
-
-void AgentDialog::slotYes()
-{
-    answer(true);
-    KDialogBase::slotYes();
-}
-
-void AgentDialog::slotNo()
-{
-    answer(false);
-    KDialogBase::slotNo();
 }
 
 void AgentDialog::slotOk()
