@@ -12,6 +12,10 @@
 #ifndef KWHATSAPP_H
 #define KWHATSAPP_H
 
+#include <qguardedptr.h>
+#include <qimage.h>
+#include <qvaluelist.h>
+
 #include <kdialogbase.h>
 #include <kparts/mainwindow.h>
 #include <ksystemtray.h>
@@ -23,12 +27,14 @@ class KToggleAction;
 namespace KParts { class ReadOnlyPart; class URLArgs; }
 class KWhatsAppTray;
 class KWhatsAppStatusLabel;
+class KWhatsAppBalloon;
 
 /**
  * The main window: WhatsApp Web (https://web.whatsapp.com, the official
  * web client) in kde3-wpepart's KWPEPart, app mode: a WebKit session of
  * its own under $KDEHOME/share/apps/kwhatsapp/webkit/ (the login stays),
- * the page's notifications through KNotify, links in the KDE browser,
+ * the page's notifications through KNotify (its passive popup as Kopete's
+ * balloon at the tray icon), links in the KDE browser,
  * downloads and uploads through KDE's dialogs.  Closing the window hides
  * it in the system tray; the tray icon shows the number of unread chats
  * (from the page title, "(N) WhatsApp").
@@ -58,14 +64,23 @@ public:
 public slots:
     void slotQuit();
 
+signals:
+    /** To the part: the user clicked the page's notification @p id. */
+    void activateNotification( int id );
+
 protected:
     virtual bool queryClose();
     virtual bool queryExit();
     virtual void hideEvent( QHideEvent* e );
+    virtual void windowActivationChange( bool oldActive );
 
 private slots:
     void slotTitleChanged( const QString& title );
-    void slotNotification( int id, const QString& title, const QString& body );
+    void slotNotification( int id, const QString& title, const QString& body, const QImage& icon );
+    void slotNotificationClosed( int id );
+    void slotBalloonView();
+    void slotBalloonIgnore();
+    void showBalloon();
     void slotPermission( const QString& kind, const QString& origin, bool& allow );
     void slotOpenURL( const KURL& url, const KParts::URLArgs& args );
     void slotStatusText( const QString& text );
@@ -77,6 +92,20 @@ private slots:
 
 private:
     void savePosition();
+    bool isInFront() const;
+    void closeBalloon();
+    void dropBalloons();
+
+    // A notification for the balloon (Kopete's queue: one at a time).
+    struct Message
+    {
+        int id;   // the part's
+        QString title;
+        QString body;
+        QImage icon;
+    };
+    QValueList<Message> m_messages;   // the first is in the balloon
+    QGuardedPtr<KWhatsAppBalloon> m_balloon;
 
     KParts::ReadOnlyPart* m_part;
     QString m_site;   // the host of the page opened (web.whatsapp.com)
@@ -89,6 +118,7 @@ private:
     bool m_notify;
     bool m_notifyContent;
     bool m_closeToTray;
+    int m_balloonTimeout;   // seconds, 0: none
 };
 
 /** The system tray icon: the application's icon, the unread count on it. */
@@ -100,6 +130,8 @@ public:
     KWhatsAppTray( KWhatsApp* window );
 
     void setUnread( int count );
+    /** Shown in a system tray (embedded): the balloon goes there. */
+    bool isDocked() const;
 
 protected:
     virtual void mousePressEvent( QMouseEvent* e );

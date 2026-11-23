@@ -5,8 +5,10 @@ kde3_add_executable(kwhatsapp
   SOURCES
     main.cpp
     kwhatsapp.cpp
+    kwhatsappballoon.cpp
   MOC
     kwhatsapp.h
+    kwhatsappballoon.h
   LINK
     KDE3::kparts
     KDE3::kio

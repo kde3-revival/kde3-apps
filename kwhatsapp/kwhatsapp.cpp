@@ -10,9 +10,12 @@
 */
 
 #include "kwhatsapp.h"
+#include "kwhatsappballoon.h"
 
 #include <qbitmap.h>
 #include <qcheckbox.h>
+#include <qdatastream.h>
+#include <qdesktopwidget.h>
 #include <qlabel.h>
 #include <qlayout.h>
 #include <qpushbutton.h>
@@ -28,6 +31,7 @@
 #include <kaction.h>
 #include <kapplication.h>
 #include <kconfig.h>
+#include <dcopclient.h>
 #include <kdebug.h>
 #include <kglobal.h>
 #include <kglobalsettings.h>
@@ -50,6 +54,7 @@
 // X11 last: its macros (None, Bool, ...) break Qt's headers
 #include <kwin.h>
 #include <netwm.h>
+#include <X11/Xlib.h>
 
 // The hovered link, the zoom: a label over the page's bottom left corner,
 // as browsers have (no status bar under WhatsApp's own layout).
@@ -88,7 +93,7 @@ private:
 
 KWhatsApp::KWhatsApp( const KURL& url )
     : KParts::MainWindow( 0, "kwhatsapp-mainwindow" ), m_part( 0 ), m_statusLabel( 0 ), m_tray( 0 ), m_showMenubar( 0 ), m_unread( 0 ),
-      m_quitting( false ), m_notify( true ), m_notifyContent( true ), m_closeToTray( true )
+      m_quitting( false ), m_notify( true ), m_notifyContent( true ), m_closeToTray( true ), m_balloonTimeout( 30 )
 {
     readSettings();
 
@@ -134,8 +139,10 @@ KWhatsApp::KWhatsApp( const KURL& url )
     statusBar()->hide();
 
     connect( m_part, SIGNAL( pageTitleChanged( const QString& ) ), SLOT( slotTitleChanged( const QString& ) ) );
-    connect( m_part, SIGNAL( notificationShown( int, const QString&, const QString& ) ),
-             SLOT( slotNotification( int, const QString&, const QString& ) ) );
+    connect( m_part, SIGNAL( notificationShown( int, const QString&, const QString&, const QImage& ) ),
+             SLOT( slotNotification( int, const QString&, const QString&, const QImage& ) ) );
+    connect( m_part, SIGNAL( notificationClosed( int ) ), SLOT( slotNotificationClosed( int ) ) );
+    connect( this, SIGNAL( activateNotification( int ) ), m_part, SLOT( activateNotification( int ) ) );
     connect( m_part, SIGNAL( permissionRequested( const QString&, const QString&, bool& ) ),
              SLOT( slotPermission( const QString&, const QString&, bool& ) ) );
     connect( m_part, SIGNAL( statusMessage( const QString& ) ), SLOT( showMessage( const QString& ) ) );
@@ -177,6 +184,9 @@ void KWhatsApp::readSettings()
     m_notify = general.readBoolEntry( "Notifications", true );
     m_notifyContent = general.readBoolEntry( "NotificationContent", true );
     m_closeToTray = general.readBoolEntry( "CloseToTray", true );
+    m_balloonTimeout = QMAX( 0, general.readNumEntry( "BalloonTimeout", 30 ) );
+    if ( !m_notify )
+        dropBalloons();
 }
 
 void KWhatsApp::slotTitleChanged( const QString& title )
@@ -189,12 +199,34 @@ void KWhatsApp::slotTitleChanged( const QString& title )
         m_tray->setUnread( m_unread );
 }
 
-void KWhatsApp::slotNotification( int, const QString& title, const QString& body )
+// KNotify's event "message" without its passive popup: the rest of what
+// the user chose in Configure Notifications (sound, log file, command,
+// ...) by the KNotify daemon, as KNotifyClient::event() sends it but with
+// the presentation given (Kopete's KNotification did the same).
+static void notifyWithout( int present, const QString& text, WId window )
+{
+    if ( present <= 0 )
+        return;
+    DCOPClient* client = kapp->dcopClient();
+    if ( !client->isAttached() )
+        client->attach();
+    if ( !client->isAttached() || !KNotifyClient::startDaemon() )
+        return;
+    QByteArray data;
+    QDataStream ds( data, IO_WriteOnly );
+    ds << QString::fromLatin1( "message" ) << QString::fromLatin1( KNotifyClient::instance()->instanceName() ) << text
+       << QString::null << QString::null << present << int( KNotifyClient::Default ) << int( window )
+       << kMax( 1, kapp->random() );
+    client->send( "knotify", "Notify", "notify(QString,QString,QString,QString,QString,int,int,int,int)", data );
+}
+
+void KWhatsApp::slotNotification( int id, const QString& title, const QString& body, const QImage& icon )
 {
     if ( !m_notify )
         return;
-    // KNotify: a passive popup and a sound by default; the user chooses
-    // in Settings, Configure Notifications.
+    // KNotify: the user chooses in Settings, Configure Notifications (a
+    // passive popup and a sound by default).  Its passive popup is our
+    // balloon at the tray icon (Kopete's); the rest is KNotify's.
     QString text;
     if ( m_notifyContent ) {
         QString escaped = QStyleSheet::escape( body );
@@ -203,7 +235,161 @@ void KWhatsApp::slotNotification( int, const QString& title, const QString& body
     } else {
         text = i18n( "New message" );
     }
-    KNotifyClient::event( winId(), "message", text );
+    int present = KNotifyClient::getPresentation( "message" );
+    if ( present == -1 )
+        present = KNotifyClient::getDefaultPresentation( "message" );
+    if ( present == -1 )
+        present = KNotifyClient::Sound | KNotifyClient::PassivePopup;
+    if ( !( present & KNotifyClient::PassivePopup ) ) {
+        KNotifyClient::event( winId(), "message", text );
+        return;
+    }
+    // (KNotify shows no message box with its passive popup either.)
+    notifyWithout( present & ~( KNotifyClient::PassivePopup | KNotifyClient::Messagebox ), text, winId() );
+    // Read in the window already: no balloon.
+    if ( isInFront() )
+        return;
+    Message message;
+    message.id = id;
+    if ( m_notifyContent ) {
+        message.title = title;
+        message.body = body;
+        message.icon = icon;
+    }
+    m_messages.append( message );
+    if ( !m_balloon )
+        showBalloon();
+}
+
+// The window is shown on this desktop and has the focus.
+bool KWhatsApp::isInFront() const
+{
+    if ( !isVisible() || isMinimized() || !isActiveWindow() )
+        return false;
+    return KWin::windowInfo( winId(), NET::WMDesktop ).isOnCurrentDesktop();
+}
+
+// Kopete's squashMessage(): one line, the first 30 characters.
+static QString squash( const QString& text, uint length )
+{
+    QString line = text.simplifyWhiteSpace();
+    if ( line.length() > length )
+        line = line.left( length ) + QString::fromLatin1( " ..." );
+    return line;
+}
+
+// The first message waiting in the balloon (Kopete's addBalloon()).
+void KWhatsApp::showBalloon()
+{
+    if ( m_balloon || m_messages.isEmpty() )
+        return;
+    const Message& message = m_messages.first();
+    QString text;
+    QPixmap picture;
+    if ( message.title.isEmpty() && message.body.isEmpty() ) {
+        // NotificationContent off (or the page said nothing)
+        text = "<qt><nobr><b>" + QStyleSheet::escape( i18n( "New message" ) ) + "</b></nobr></qt>";
+    } else {
+        text = i18n( "<qt><nobr><b>New message from %1:</b></nobr><br><nobr>\"%2\"</nobr></qt>" )
+                   .arg( QStyleSheet::escape( squash( message.title, 40 ) ), QStyleSheet::escape( squash( message.body, 30 ) ) );
+        if ( !message.icon.isNull() ) {
+            QImage image = message.icon;
+            if ( image.width() > 48 || image.height() > 48 )
+                image = image.smoothScale( 48, 48, QImage::ScaleMin );
+            picture.convertFromImage( image );
+        }
+    }
+    if ( picture.isNull() )
+        picture = DesktopIcon( "kwhatsapp", 48 );
+    m_balloon = new KWhatsAppBalloon( text, picture, m_balloonTimeout );
+    connect( m_balloon, SIGNAL( viewClicked() ), SLOT( slotBalloonView() ) );
+    connect( m_balloon, SIGNAL( ignoreClicked() ), SLOT( slotBalloonIgnore() ) );
+    connect( m_balloon, SIGNAL( timedOut() ), SLOT( slotBalloonIgnore() ) );
+
+    if ( m_tray && m_tray->isDocked() ) {
+        // At the tray icon, the tail at its edge towards the screen's
+        // centre (the screen the icon is on).
+        QRect icon( m_tray->mapToGlobal( QPoint( 0, 0 ) ), m_tray->size() );
+        QRect screen = KGlobalSettings::desktopGeometry( icon.center() );
+        QPoint anchor( icon.center().x(), icon.center().y() > screen.center().y() ? icon.top() : icon.bottom() );
+        m_balloon->setAnchor( anchor, true );
+    } else {
+        // No system tray: the corner of the work area of the screen the
+        // window (or else the mouse) is on, as KPassivePopup.
+        QDesktopWidget* desktop = QApplication::desktop();
+        int number = isVisible() ? desktop->screenNumber( this ) : desktop->screenNumber( QCursor::pos() );
+        QRect screen = desktop->screenGeometry( number );
+        NETRootInfo info( qt_xdisplay(), NET::CurrentDesktop | NET::WorkArea, -1, false );
+        info.activate();
+        NETRect work = info.workArea( info.currentDesktop() );
+        QRect area = QRect( work.pos.x, work.pos.y, work.size.width, work.size.height ).intersect( screen );
+        if ( area.isEmpty() )
+            area = screen;
+        m_balloon->setAnchor( area.bottomRight(), false );
+    }
+    m_balloon->show();
+}
+
+void KWhatsApp::closeBalloon()
+{
+    if ( m_balloon ) {
+        m_balloon->hide();
+        m_balloon->deleteLater();
+        m_balloon = 0;
+    }
+}
+
+// The window is in front: every message waiting is read there.
+void KWhatsApp::dropBalloons()
+{
+    m_messages.clear();
+    closeBalloon();
+}
+
+// View (or a click on the balloon): the window on this desktop, the chat
+// opened by the page (its notification's click).
+void KWhatsApp::slotBalloonView()
+{
+    if ( m_messages.isEmpty() )
+        return;
+    int id = m_messages.first().id;
+    m_messages.remove( m_messages.begin() );
+    closeBalloon();
+    showOnCurrentDesktop();
+    emit activateNotification( id );
+    QTimer::singleShot( 0, this, SLOT( showBalloon() ) );
+}
+
+// Ignore, the timeout: the next message.
+void KWhatsApp::slotBalloonIgnore()
+{
+    if ( !m_messages.isEmpty() )
+        m_messages.remove( m_messages.begin() );
+    closeBalloon();
+    QTimer::singleShot( 0, this, SLOT( showBalloon() ) );
+}
+
+// The page closed its notification (read on the phone, ...).
+void KWhatsApp::slotNotificationClosed( int id )
+{
+    for ( QValueList<Message>::Iterator it = m_messages.begin(); it != m_messages.end(); ++it ) {
+        if ( ( *it ).id != id )
+            continue;
+        bool shown = it == m_messages.begin() && m_balloon;
+        m_messages.remove( it );
+        if ( shown ) {
+            closeBalloon();
+            QTimer::singleShot( 0, this, SLOT( showBalloon() ) );
+        }
+        return;
+    }
+}
+
+void KWhatsApp::windowActivationChange( bool oldActive )
+{
+    KParts::MainWindow::windowActivationChange( oldActive );
+    if ( isInFront() )
+        dropBalloons();
 }
 
 void KWhatsApp::slotPermission( const QString& kind, const QString& origin, bool& allow )
@@ -253,8 +439,10 @@ void KWhatsApp::showMessage( const QString& text )
 
 void KWhatsApp::showOnCurrentDesktop()
 {
+    // Minimized: shown again as it was (showNormal() would also take back
+    // a maximization, e.g. the window manager's vertical one).
     if ( isMinimized() )
-        showNormal();
+        setWindowState( windowState() & ~WindowMinimized );
     if ( !isVisible() ) {
         // A window shown again goes to the desktop in its _NET_WM_DESKTOP:
         // set it before mapping (the client's job for a withdrawn window),
@@ -358,6 +546,27 @@ KWhatsAppTray::KWhatsAppTray( KWhatsApp* window )
     setUnread( 0 );
 }
 
+// In a system tray: there is one (the owner of the freedesktop.org
+// system tray selection: kicker's) and it took our window (reparented);
+// without one the window is its own (or the window manager's frame's).
+bool KWhatsAppTray::isDocked() const
+{
+    if ( !isVisible() )
+        return false;
+    QCString selection;
+    selection.sprintf( "_NET_SYSTEM_TRAY_S%d", qt_xscreen() );
+    if ( XGetSelectionOwner( qt_xdisplay(), XInternAtom( qt_xdisplay(), selection.data(), False ) ) == 0 )
+        return false;
+    Window root = 0, parent = 0;
+    Window* children = 0;
+    unsigned int count = 0;
+    if ( !XQueryTree( qt_xdisplay(), winId(), &root, &parent, &children, &count ) )
+        return false;
+    if ( children )
+        XFree( children );
+    return parent != 0 && parent != root;
+}
+
 void KWhatsAppTray::slotRestore()
 {
     if ( m_window->isVisible() )
@@ -443,7 +652,7 @@ KWhatsAppConfigDialog::KWhatsAppConfigDialog( QWidget* parent )
 
     QVGroupBox* notifications = new QVGroupBox( i18n( "Notifications" ), page );
     m_notify = new QCheckBox( i18n( "&Show a notification for new messages" ), notifications );
-    m_notifyContent = new QCheckBox( i18n( "Show the &sender and the text (otherwise only \"New message\")" ), notifications );
+    m_notifyContent = new QCheckBox( i18n( "Show the &sender, the text and the picture (otherwise only \"New message\")" ), notifications );
     QPushButton* configure = new QPushButton( i18n( "Configure &Notifications..." ), notifications );
     QWhatsThis::add( configure, i18n( "The popup, the sound and other ways KDE tells about new messages." ) );
     connect( configure, SIGNAL( clicked() ), parent, SLOT( slotConfigureNotifications() ) );

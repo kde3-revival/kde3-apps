@@ -47,7 +47,7 @@ New in the KDE3 revival:
 
 | Directory     | Application    | What it is                                                      |
 |---------------|----------------|-----------------------------------------------------------------|
-| `kwhatsapp/`  | kwhatsapp      | WhatsApp Web (WhatsApp's own web client) as a KDE application: its own window and login, a tray icon with the unread count, notifications through KNotify; WPE WebKit through kde3-wpepart's KWPEPart (app mode) |
+| `kwhatsapp/`  | kwhatsapp      | WhatsApp Web (WhatsApp's own web client) as a KDE application: its own window and login, a tray icon with the unread count, notifications through KNotify, shown as Kopete's balloon at the tray icon with the sender's picture; WPE WebKit through kde3-wpepart's KWPEPart (app mode) |
 
 The handbook of each application is in `doc/<application>/`
 (`doc/kinfocenter/blockdevices/` belongs to KDiskFree).
