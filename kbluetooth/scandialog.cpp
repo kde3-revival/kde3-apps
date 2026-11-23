@@ -45,14 +45,23 @@ ScanDialog::ScanDialog(BluetoothTray *tray)
     layout->addWidget(hint);
 
     m_list = new KListView(page);
+    // the status before the details, so that a long error stays visible
     m_list->addColumn(i18n("Device"));
-    m_list->addColumn(i18n("Type"));
-    m_list->addColumn(i18n("Signal"));
     m_list->addColumn(i18n("Status"));
+    m_list->addColumn(i18n("Signal"));
+    m_list->addColumn(i18n("Type"));
+    m_list->addColumn(i18n("Address"));
+    m_list->setColumnWidthMode(1, QListView::Manual);
+    m_list->setColumnWidth(1, 200);
     m_list->setAllColumnsShowFocus(true);
     m_list->setSorting(0);
-    m_list->setMinimumSize(600, 220);
+    m_list->setMinimumSize(680, 220);
     layout->addWidget(m_list, 1);
+
+    // the whole status of the selected device, which may be long
+    m_detail = new QLabel(page);
+    m_detail->setAlignment(WordBreak | AlignLeft | AlignTop);
+    layout->addWidget(m_detail);
 
     m_status = new QLabel(page);
     layout->addWidget(m_status);
@@ -165,10 +174,10 @@ void ScanDialog::updateItem(const QString &path)
         m_items.insert(path, item);
     }
     item->setPixmap(0, KBluetoothIcons::deviceIcon(d.icon, 16));
-    item->setText(0, d.name == d.address ? d.address : i18n("device name, address", "%1 (%2)")
-                  .arg(d.name).arg(d.address));
-    item->setText(1, KBluetoothIcons::deviceType(d.icon));
+    item->setText(0, d.name);
     item->setText(2, d.hasRssi ? i18n("%1 dBm").arg(d.rssi) : QString::fromLatin1("-"));
+    item->setText(3, KBluetoothIcons::deviceType(d.icon));
+    item->setText(4, d.address);
 
     QString status;
     QString state = m_state.contains(path) ? m_state[path] : QString::null;
@@ -184,7 +193,7 @@ void ScanDialog::updateItem(const QString &path)
         status = state.mid(strlen(stateFailed) + 1);
     else
         status = d.connected ? i18n("Connected") : QString::null;
-    item->setText(3, status);
+    item->setText(1, status);
 }
 
 QString ScanDialog::selectedPath() const
@@ -199,6 +208,10 @@ QString ScanDialog::selectedPath() const
 void ScanDialog::selectionChanged()
 {
     QString path = selectedPath();
+    QListViewItem *item = m_list->selectedItem();
+    m_detail->setText(item && !item->text(1).isEmpty()
+                      ? QString::fromLatin1("%1: %2").arg(item->text(0)).arg(item->text(1))
+                      : QString::null);
     QString state = m_state.contains(path) ? m_state[path] : QString::null;
     if (state == statePairing) {
         setButtonGuiItem(User1, KGuiItem(i18n("&Cancel Pairing"), "button_cancel"));

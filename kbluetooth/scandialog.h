@@ -56,6 +56,7 @@ private:
     BluetoothTray *m_tray;
     KListView *m_list;
     QLabel *m_status;
+    QLabel *m_detail;
     QString m_adapter;          // the adapter we discover on
     bool m_discovering;         // StartDiscovery was called by us
     QMap<QString, QListViewItem *> m_items;
