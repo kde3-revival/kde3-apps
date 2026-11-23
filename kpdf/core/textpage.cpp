@@ -12,7 +12,7 @@
 #include <math.h>
 
 KPDFTextPage::KPDFTextPage( const QString & text, const QMemArray<float> & rects )
-    : m_text( text ), m_rects( rects )
+    : m_text( text ), m_rects( rects ), m_lastEnd( 0 ), m_lastValid( false )
 {
     // one box per character; pad when the generator gave fewer
     uint have = m_rects.size() / 4;
@@ -127,9 +127,14 @@ NormalizedRect * KPDFTextPage::findText( const QString & text, bool caseSensitiv
     }
     from[n] = len;
 
-    // matches in reading order; with 'last', the one after it
-    bool passedLast = false;
+    // matches in reading order.  With 'last': when it is the match this
+    // page returned before, the next match begins after its text (two
+    // matches can have one box: a ligature, text printed twice); else the
+    // first match below 'last' or right of it on its line.
+    bool continuing = last && m_lastValid && sameRect( *last, m_lastRect );
+    uint minStart = continuing ? m_lastEnd : 0;
     NormalizedRect firstAfter;
+    uint firstAfterEnd = 0;
     bool haveFirstAfter = false;
     int pos = 0;
     while ( ( pos = hay.find( needle, pos, caseSensitive ) ) >= 0 )
@@ -137,26 +142,31 @@ NormalizedRect * KPDFTextPage::findText( const QString & text, bool caseSensitiv
         NormalizedRect r;
         uint start = from[pos], end = from[pos + needle.length() - 1] + 1;
         ++pos;
-        if ( !unite( this, start, end, r ) )
+        if ( start < minStart || !unite( this, start, end, r ) )
             continue;
-        if ( !last || passedLast )
-            return new NormalizedRect( r );
-        if ( sameRect( r, *last ) )
+        if ( !last || continuing )
         {
-            passedLast = true;
-            continue;
+            m_lastRect = r;
+            m_lastEnd = end;
+            m_lastValid = true;
+            return new NormalizedRect( r );
         }
-        // in case 'last' is not a match of this text: the first match
-        // below it, or right of it on its line
         if ( !haveFirstAfter && ( r.top > last->bottom ||
              ( r.top >= last->top - 1e-6 && r.left > last->left ) ) )
         {
             firstAfter = r;
+            firstAfterEnd = end;
             haveFirstAfter = true;
         }
     }
-    if ( !passedLast && haveFirstAfter )
+    if ( !continuing && haveFirstAfter )
+    {
+        m_lastRect = firstAfter;
+        m_lastEnd = firstAfterEnd;
+        m_lastValid = true;
         return new NormalizedRect( firstAfter );
+    }
+    m_lastValid = false;
     return 0;
 }
 

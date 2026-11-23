@@ -62,6 +62,10 @@ class KPDFTextPage
 
         QString m_text;
         QMemArray<float> m_rects;
+        // the last match findText() returned, to continue after its text
+        mutable NormalizedRect m_lastRect;
+        mutable uint m_lastEnd;
+        mutable bool m_lastValid;
 };
 
 #endif
