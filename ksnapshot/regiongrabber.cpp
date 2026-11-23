@@ -30,17 +30,31 @@
 
 #include <X11/Xlib.h>
 
-// how many times (every 50 ms) to try to get the pointer and keyboard,
-// which the global shortcut that started us may still hold
-static const int maxGrabTries = 40;
+// how many times (every 50 ms) to try to get the pointer and keyboard:
+// the global shortcut that started us may still hold the keyboard (until
+// its key is released), an open menu holds both until it is closed (KWin
+// runs us also while a menu is open: the picture is taken at once, the
+// selection waits), i.e. 20 s
+static const int maxGrabTries = 400;
+
+// a key is down (the shortcut's own grab lasts until its release)
+static bool keyHeld( Display *dpy )
+{
+  char keys[ 32 ];
+  XQueryKeymap( dpy, keys );
+  for ( int i = 0; i < 32; ++i )
+    if ( keys[ i ] != 0 )
+      return true;
+  return false;
+}
 
 RegionGrabber::RegionGrabber( int delay )
   : QWidget( 0, 0, WStyle_Customize | WX11BypassWM | WNoAutoErase ),
-    mouseDown( false ), done( false ), grabTries( 0 )
+    mouseDown( false ), done( false ), waiting( false ), grabTries( 0 )
 {
   setBackgroundMode( NoBackground );
   setMouseTracking( true );
-  hint = i18n( "Drag to select an area of the screen; press Esc to cancel" );
+  hint = selectHint();
 
   QTimer::singleShot( delay, this, SLOT( initGrabber() ) );
 }
@@ -96,15 +110,39 @@ void RegionGrabber::grabInput()
       CurrentTime ) == GrabSuccess;
   const bool keyboard = XGrabKeyboard( dpy, winId(), False, GrabModeAsync,
       GrabModeAsync, CurrentTime ) == GrabSuccess;
-  if ( pointer && keyboard )
+  if ( pointer && keyboard ) {
+    setWaiting( false );
     return;
+  }
 
   releaseMouse();
   releaseKeyboard();
+  // no key down: another program has the grabs, a menu that is open
+  setWaiting( !keyHeld( dpy ) );
   if ( ++grabTries < maxGrabTries )
     QTimer::singleShot( 50, this, SLOT( grabInput() ) );
   else
     finish( QPixmap() );
+}
+
+QString RegionGrabber::selectHint()
+{
+  return i18n( "Drag to select an area of the screen; press Esc to cancel" );
+}
+
+/*
+ Until the menu open at the Print key is closed, the menu's program has
+ the keyboard and the mouse: the picture (with the menu) is shown, the
+ hint says what to do.  Esc and clicks go to the menu meanwhile.
+*/
+void RegionGrabber::setWaiting( bool wait )
+{
+  if ( wait == waiting )
+    return;
+  waiting = wait;
+  const QRect old = hintRect();
+  hint = wait ? i18n( "Close the menu (Esc) to select an area of the screen" ) : selectHint();
+  update( old.unite( hintRect() ) );
 }
 
 QRect RegionGrabber::selection() const

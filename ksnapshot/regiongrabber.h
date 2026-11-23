@@ -28,7 +28,8 @@
  desktop (all monitors), dimmed outside the selection; the region is cut
  from that picture, so neither the overlay nor anything drawn on it is in
  the result.  regionGrabbed() is emitted once: with the region, or with a
- null pixmap when cancelled (Escape, right button, or no input grab).
+ null pixmap when cancelled (Escape, right button, or no input grab within
+ 20 s: a menu open meanwhile holds it until it is closed).
 */
 class RegionGrabber : public QWidget
 {
@@ -60,9 +61,12 @@ class RegionGrabber : public QWidget
     QRect labelRect( const QRect &sel ) const;
     QRect hintRect() const;
     void finish( const QPixmap &result );
+    void setWaiting( bool wait );
+    static QString selectHint();
 
     bool mouseDown;
     bool done;
+    bool waiting; // for the grabs that a menu holds
     int grabTries;
     QPoint startPos;
     QPoint endPos;
