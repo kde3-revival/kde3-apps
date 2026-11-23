@@ -47,7 +47,7 @@ New in the KDE3 revival:
 
 | Directory     | Application    | What it is                                                      |
 |---------------|----------------|-----------------------------------------------------------------|
-| `kwhatsapp/`  | kwhatsapp      | WhatsApp Web (WhatsApp's own web client) as a KDE application: its own window and login, a tray icon with the unread count, notifications through KNotify, shown as Kopete's balloon at the tray icon with the sender's picture; WPE WebKit through kde3-wpepart's KWPEPart (app mode) |
+| `kwhatsapp/`  | KWhatsApp      | WhatsApp Web (WhatsApp's own web client) as a KDE application: its own window and login, a tray icon with the unread count, notifications through KNotify, shown as Kopete's balloon at the tray icon with the sender's picture; WPE WebKit through kde3-wpepart's KWPEPart (app mode) |
 
 The handbook of each application is in `doc/<application>/`
 (`doc/kinfocenter/blockdevices/` belongs to KDiskFree).
@@ -89,7 +89,7 @@ Options (all `ON` by default):
 | `KDE3_APPS_KRULER`           | KRuler                                                    |
 | `KDE3_APPS_KSNAPSHOT`        | KSnapshot                                                 |
 | `KDE3_APPS_KSNAPSHOT_XSHAPE` | KSnapshot cuts non-rectangular windows to their shape (X Shape extension; the configuration stops if it is missing) |
-| `KDE3_APPS_KWHATSAPP`        | kwhatsapp (at run time: kde3-wpepart with its app mode)    |
+| `KDE3_APPS_KWHATSAPP`        | KWhatsApp (at run time: kde3-wpepart with its app mode)    |
 
 The handbook of an application is built with it.  To build a single
 application, switch the others off, for example KCalc only:
@@ -126,8 +126,8 @@ As stated in the source files:
   KTimer, KWalletManager, KRuler.  Most files of KView say GPL version 2
   only; a few in `kview/kviewviewer/` say version 2 or later.  KCharSelect
   and some single files have no licence header; their About dialogs say GPL.
-- kwhatsapp: GPL version 2 or later; its icon is a chat bubble of its own,
-  not WhatsApp's logo.  kwhatsapp is not made or endorsed by WhatsApp.
+- KWhatsApp: GPL version 2 or later; its icon is a chat bubble of its own,
+  not WhatsApp's logo.  KWhatsApp is not made or endorsed by WhatsApp.
 - KSnapshot: `main.cpp`, `regiongrabber.*` and `windowgrabber.*` are GPL
   version 2 or later; `ksnapshot.cpp`, `quickshot.cpp` and `quickshot.h`
   say "Released under the LGPL" without a version; the other files have no

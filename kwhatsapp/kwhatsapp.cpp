@@ -408,7 +408,7 @@ void KWhatsApp::slotPermission( const QString& kind, const QString& origin, bool
     allow = false;
     kdDebug() << "kwhatsapp: denied " << kind << " for " << origin << endl;
     if ( kind == "microphone" || kind == "camera" || kind == "screen" )
-        showMessage( i18n( "kwhatsapp cannot use the microphone or the camera yet: voice messages and calls do "
+        showMessage( i18n( "KWhatsApp cannot use the microphone or the camera yet: voice messages and calls do "
                            "not work. Use WhatsApp on the phone for them." ) );
 }
 
@@ -423,7 +423,7 @@ void KWhatsApp::slotOpenURL( const KURL& url, const KParts::URLArgs& )
     else if ( protocol == "mailto" )
         kapp->invokeMailer( url );
     else
-        showMessage( i18n( "kwhatsapp does not open links of this kind: %1" ).arg( url.prettyURL() ) );
+        showMessage( i18n( "KWhatsApp does not open links of this kind: %1" ).arg( url.prettyURL() ) );
 }
 
 void KWhatsApp::slotStatusText( const QString& text )
@@ -644,7 +644,7 @@ void KWhatsAppTray::resizeEvent( QResizeEvent* e )
 // ---------------------------------------------------------------------
 
 KWhatsAppConfigDialog::KWhatsAppConfigDialog( QWidget* parent )
-    : KDialogBase( parent, "kwhatsapp-config", false, i18n( "Configure kwhatsapp" ),
+    : KDialogBase( parent, "kwhatsapp-config", false, i18n( "Configure KWhatsApp" ),
                    Ok | Apply | Cancel | Default, Ok, true )
 {
     setWFlags( getWFlags() | WDestructiveClose );

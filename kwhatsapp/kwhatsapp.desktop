@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=kwhatsapp
+Name=KWhatsApp
 GenericName=WhatsApp Web
 Comment=WhatsApp's web client as a KDE application
 Exec=kwhatsapp %i -caption "%c"

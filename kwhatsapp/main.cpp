@@ -43,7 +43,7 @@ public:
             m_window = new KWhatsApp( KURL( args->getOption( "url" ) ) );
             if ( !m_window->isValid() ) {
                 KMessageBox::error( 0, i18n( "The WPE WebKit part (kde3-wpepart) with its app mode is not "
-                                             "installed: kwhatsapp cannot show WhatsApp Web." ) );
+                                             "installed: KWhatsApp cannot show WhatsApp Web." ) );
                 delete m_window;
                 m_window = 0;
                 ::exit( 1 );
@@ -83,9 +83,9 @@ private:
 
 int main( int argc, char** argv )
 {
-    KAboutData about( "kwhatsapp", I18N_NOOP( "kwhatsapp" ), "0.1", description, KAboutData::License_GPL,
+    KAboutData about( "kwhatsapp", I18N_NOOP( "KWhatsApp" ), "0.1", description, KAboutData::License_GPL,
                       "(c) 2026 The kde3-revival authors" );
-    about.addCredit( "WhatsApp", I18N_NOOP( "kwhatsapp shows WhatsApp Web, WhatsApp's own web client; "
+    about.addCredit( "WhatsApp", I18N_NOOP( "KWhatsApp shows WhatsApp Web, WhatsApp's own web client; "
                                             "it is not made or endorsed by WhatsApp" ), 0, "https://web.whatsapp.com/" );
     KCmdLineArgs::init( argc, argv, &about );
     KCmdLineArgs::addCmdLineOptions( options );
