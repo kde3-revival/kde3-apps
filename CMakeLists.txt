@@ -11,6 +11,19 @@ project(kde3-apps VERSION 3.5.10 LANGUAGES C CXX)
 
 set(KDE3_APPS_VERSION "${PROJECT_VERSION}")
 
+# One option per application, so each can be built and packaged on its
+# own.  The handbook of an application follows its option.
+option(KDE3_APPS_ARK         "Build Ark, the archive manager" ON)
+option(KDE3_APPS_KCALC       "Build KCalc, the scientific calculator (needs the GMP library)" ON)
+option(KDE3_APPS_KCHARSELECT "Build KCharSelect, the character selector" ON)
+option(KDE3_APPS_KDF         "Build KDiskFree, KwikDisk and the disk usage module of KInfoCenter" ON)
+option(KDE3_APPS_KHEXEDIT    "Build KHexEdit, the binary file editor" ON)
+option(KDE3_APPS_KTIMER      "Build KTimer, the countdown launcher" ON)
+option(KDE3_APPS_KWALLET     "Build KWalletManager, the KWallet manager" ON)
+option(KDE3_APPS_KVIEW       "Build KView, the image viewer and its KParts" ON)
+option(KDE3_APPS_KRULER      "Build KRuler, the screen ruler" ON)
+option(KDE3_APPS_KSNAPSHOT   "Build KSnapshot, the screen capture program" ON)
+
 # kdelibs: the CMake package, install prefix, compiler settings, RUNPATH
 include(cmake/KDELibs.cmake)
 
@@ -23,18 +36,13 @@ add_compile_definitions(HAVE_CONFIG_H)
 include_directories("${PROJECT_BINARY_DIR}")
 
 # from kdeutils
-if(KDEUTILS_BUILD_KCALC)
-  add_subdirectory(kcalc)
-endif()
-add_subdirectory(kcharselect)
-add_subdirectory(kdf)
-add_subdirectory(ktimer)
-add_subdirectory(kwallet)
-add_subdirectory(khexedit)
-add_subdirectory(ark)
-# from kdegraphics
-add_subdirectory(kview)
-add_subdirectory(kruler)
-add_subdirectory(ksnapshot)
+foreach(_app ark kcalc kcharselect kdf ktimer kwallet khexedit
+        # from kdegraphics
+        kview kruler ksnapshot)
+  string(TOUPPER "${_app}" _APP)
+  if(KDE3_APPS_${_APP})
+    add_subdirectory(${_app})
+  endif()
+endforeach()
 
 add_subdirectory(doc)

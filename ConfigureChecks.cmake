@@ -26,15 +26,14 @@ endif()
 
 # ---- kcalc (kcalc/configure.in.in, kcalc/knumber/configure.in.in) ---------
 # Without GMP configure left kcalc out (DO_NOT_COMPILE); here that is an
-# explicit choice.
-option(KDEUTILS_BUILD_KCALC "Build KCalc (needs the GMP library)" ON)
-if(KDEUTILS_BUILD_KCALC)
+# explicit choice, the option KDE3_APPS_KCALC.
+if(KDE3_APPS_KCALC)
   find_path(GMP_INCLUDE_DIR gmp.h)
   find_library(GMP_LIBRARY gmp)
   if(NOT GMP_INCLUDE_DIR OR NOT GMP_LIBRARY)
     message(FATAL_ERROR "GMP (gmp.h, libgmp) was not found; KCalc needs it "
       "for its arbitrary precision numbers.  Install it, or configure with "
-      "-DKDEUTILS_BUILD_KCALC=OFF to build without KCalc.")
+      "-DKDE3_APPS_KCALC=OFF to build without KCalc.")
   endif()
   mark_as_advanced(GMP_INCLUDE_DIR GMP_LIBRARY)
   set(HAVE_GMP 1)
@@ -78,9 +77,11 @@ endif()
 # ---- ksnapshot (ksnapshot/configure.in.in) ---------------------------------
 # The X Shape extension gives the window grabber the shape of windows that
 # are not rectangular (cut out of the grabbed pixmap).
-option(KDEGRAPHICS_WITH_XSHAPE
-  "Cut non-rectangular windows to their shape in KSnapshot (X Shape extension)" ON)
-if(KDEGRAPHICS_WITH_XSHAPE)
+if(KDE3_APPS_KSNAPSHOT)
+  option(KDE3_APPS_KSNAPSHOT_XSHAPE
+    "Cut non-rectangular windows to their shape in KSnapshot (X Shape extension)" ON)
+endif()
+if(KDE3_APPS_KSNAPSHOT AND KDE3_APPS_KSNAPSHOT_XSHAPE)
   cmake_push_check_state(RESET)
   set(CMAKE_REQUIRED_INCLUDES ${X11_INCLUDE_DIR})
   check_include_files("X11/Xlib.h;X11/Xutil.h;X11/extensions/shape.h"
@@ -90,6 +91,6 @@ if(KDEGRAPHICS_WITH_XSHAPE)
     message(FATAL_ERROR "The X Shape extension (X11/extensions/shape.h and "
       "libXext) was not found; KSnapshot uses it to cut windows to their "
       "shape.  Install the libXext development files, or configure with "
-      "-DKDEGRAPHICS_WITH_XSHAPE=OFF to build without it.")
+      "-DKDE3_APPS_KSNAPSHOT_XSHAPE=OFF to build without it.")
   endif()
 endif()
