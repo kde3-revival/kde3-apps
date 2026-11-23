@@ -32,13 +32,12 @@
 #include "json.h"
 #include "weathericons.h"
 #include "weathermodels.h"
+#include "weatherservers.h"
 
 #include <math.h>
 
 namespace
 {
-
-const char apiUrl[] = "https://api.open-meteo.com/v1/forecast";
 
 // Open-Meteo computes the current weather every 15 minutes.
 const int refreshSeconds = 15 * 60;
@@ -225,7 +224,7 @@ QString compass(double degrees)
 
 WeatherLib::WeatherLib(QObject *parent, const char *name)
 	: QObject(parent, name),
-	  m_tempUnit("celsius"), m_windUnit("kmh"), m_precipUnit("mm"),
+	  m_server(WeatherServers::forecast()), m_tempUnit("celsius"), m_windUnit("kmh"), m_precipUnit("mm"),
 	  m_pressureUnit("hPa")
 {
 	m_data.setAutoDelete(true);
@@ -254,6 +253,11 @@ void WeatherLib::setUnits(const QString &temperature, const QString &wind,
 		else
 			emit fileUpdate(it.currentKey());
 	}
+}
+
+void WeatherLib::setServer(const QString &url)
+{
+	m_server = url.isEmpty() ? WeatherServers::forecast() : url;
 }
 
 WeatherLib::Data* WeatherLib::findData(const QString &id)
@@ -300,7 +304,7 @@ void WeatherLib::startJob(Data *d, const QString &model, bool current,
                           bool hourly, bool daily)
 {
 	QLocale c = QLocale::c();
-	KURL url(QString::fromLatin1(apiUrl));
+	KURL url(m_server);
 	QString query = QString::fromLatin1("latitude=") + c.toString(d->latitude, 'f', 4)
 	              + QString::fromLatin1("&longitude=") + c.toString(d->longitude, 'f', 4)
 	              + QString::fromLatin1("&models=") + model
@@ -327,6 +331,10 @@ void WeatherLib::startJob(Data *d, const QString &model, bool current,
 	kdDebug(12006) << "Fetching " << url.url() << endl;
 	KIO::Job *job = KIO::storedGet(url, true, false);
 	job->addMetaData("cache", "reload");
+	// Open-Meteo prefers "deflate", which kio_http inflates as raw deflate
+	// while HTTP sends it with the zlib header (RFC 9110): "Receiving
+	// corrupt data".  The answers are small; ask for them uncompressed.
+	job->addMetaData("AllowCompressedPage", "false");
 	connect(job, SIGNAL(result(KIO::Job*)), SLOT(slotJobDone(KIO::Job*)));
 	m_jobs.insert(job, d->id);
 	++d->pending;

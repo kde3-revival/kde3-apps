@@ -26,6 +26,7 @@
 #include <kmessagebox.h>
 #include <kpopupmenu.h>
 #include <kconfig.h>
+#include <kjanuswidget.h>
 #include <kinstance.h>
 #include <knotifyclient.h>
 #include <ksettings/dialog.h>
@@ -90,7 +91,8 @@ kweather::~kweather()
 void kweather::initContextMenu()
 {
     mContextMenu = new KPopupMenu(this);
-    mContextMenu->insertTitle(i18n("KWeather - %1").arg( reportLocation ), -1, 0);
+    mContextMenu->insertTitle(i18n("KWeather - %1").arg( mLocationName.isEmpty()
+        ? reportLocation : mLocationName ), -1, 0);
     mContextMenu->insertItem(SmallIcon("viewmag"), i18n("Show &Forecast"),
         this, SLOT(doReport()), 0, -1, 1);
     mContextMenu->insertItem(SmallIcon("reload"), i18n("&Update Now"),
@@ -119,6 +121,10 @@ void kweather::initDCOP()
         delete mWeatherService;
     
     mWeatherService = new WeatherService_stub( "KWeatherService", "WeatherService" );
+
+    // the service keeps the names of the places; it may have lost them
+    if ( !reportLocation.isEmpty() && !mLocationName.isEmpty() )
+        mWeatherService->addLocation( reportLocation, mLocationName, mLocationCountry );
     
     if (!connectDCOPSignal(0, 0, "fileUpdate(QString)",
         "refresh(QString)",false))
@@ -164,11 +170,12 @@ void kweather::preferences()
 
     if ( settingsDialog == 0 )
     {
-      settingsDialog = new KCMultiDialog( this );
+      // one page since the station list of the service is gone
+      settingsDialog = new KCMultiDialog( KJanusWidget::Plain,
+              i18n( "Configure KWeather" ), this );
       connect( settingsDialog, SIGNAL( configCommitted() ), SLOT( slotPrefsAccepted() ) );
 
       settingsDialog->addModule( "kcmweather.desktop" );
-      settingsDialog->addModule( "kcmweatherservice.desktop" );
     }
 
     settingsDialog->show();
@@ -231,6 +238,8 @@ void kweather::loadPrefs(){
     logOn = kcConfig->readBoolEntry("logging", false);
     fileName = kcConfig->readPathEntry("log_file_name");
     reportLocation = kcConfig->readEntry("report_location");
+    mLocationName = kcConfig->readEntry("location_name");
+    mLocationCountry = kcConfig->readEntry("location_country");
     mViewMode = kcConfig->readNumEntry("smallview_mode", dockwidget::ShowTempOnly);
     mRainAlert = kcConfig->readBoolEntry("rain_alert", false);
 
@@ -350,9 +359,11 @@ void kweather::checkRain()
     // once per rain spell, not at every update
     if ( !rain.isEmpty() && !mRainExpected )
     {
+        kdDebug(12004) << "rain expected: " << rain << endl;
         static KInstance *instance = new KInstance( "kweather" );
         KNotifyClient::Instance notifyInstance( instance );
-        KNotifyClient::event( winId(), "rain",
+        // the window of the panel: the applet's own is not a top level one
+        KNotifyClient::event( topLevelWidget()->winId(), "rain",
                 i18n( "Rain is expected in the next hour in %1: %2." )
                 .arg( mWeatherService->stationName( reportLocation ) ).arg( rain ) );
     }
@@ -364,6 +375,9 @@ void kweather::slotPrefsAccepted()
     // Preferences have been saved in the config file by the KCModule,
     // so read them out.
     loadPrefs();
+    mRainExpected = false;
+    delete mContextMenu;    // its title names the place
+    initContextMenu();
 
     dockWidget->setLocationCode(reportLocation);
     dockWidget->setViewMode(mViewMode);

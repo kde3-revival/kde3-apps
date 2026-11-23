@@ -47,6 +47,9 @@ class WeatherLib : public QObject
 		WeatherLib(QObject *parent =0L, const char *name =0L);
 		virtual ~WeatherLib();
 
+		/** The forecast API, e.g. of a self-hosted Open-Meteo. */
+		void setServer(const QString &url);
+
 		/** "celsius"/"fahrenheit", "kmh"/"ms"/"mph"/"kn",
 		    "mm"/"inch", "hPa"/"inHg"; refetches when they change. */
 		void setUnits(const QString &temperature, const QString &wind,
@@ -97,6 +100,7 @@ class WeatherLib : public QObject
 		QString formatPrecipitation(double value) const;
 
 		QDict<Data> m_data;
+		QString m_server;
 		QMap<KIO::Job*, QString> m_jobs;
 		QString m_tempUnit;
 		QString m_windUnit;

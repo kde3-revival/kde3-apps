@@ -73,7 +73,9 @@ private: // Private methods
     
     bool attach();
     
-    QString reportLocation;
+    QString reportLocation;     // the location key of KWeatherService
+    QString mLocationName;
+    QString mLocationCountry;
     QString fileName;
     bool logOn;
     bool mRainAlert;

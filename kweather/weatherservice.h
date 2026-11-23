@@ -27,6 +27,7 @@
 #include <dcopobject.h>
 #include <qpixmap.h>
 
+class KConfig;
 class WeatherLib;
 
 /**
@@ -46,6 +47,9 @@ class WeatherService : public QObject, public DCOPObject
 
 	private:
 		WeatherLib  *m_weatherLib;
+		// kweatherservicerc, also written by the settings of the applet
+		// (KDE 3.5 used KWeatherServicerc, whose METAR stations are no use)
+		KConfig     *m_config;
 
 	private slots:
 		void updated(const QString &stationID);

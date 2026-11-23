@@ -212,7 +212,7 @@ void dockwidget::resizeView( const QSize &size )
         }
         else if ( m_mode == ShowTempOnly )
         {
-            if ( h <= 32 )  // left to right
+            if ( h <= 64 )  // left to right: the icon beside the temperature
             {
                 static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::LeftToRight);
                 m_lblTemp->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
@@ -319,7 +319,7 @@ int dockwidget::widthForHeight(int h)
     }
     else if ( m_mode == ShowTempOnly )
     {
-        if ( h <= 32 )  // left to right layout
+        if ( h <= 64 )  // left to right: the icon beside the temperature
         {
             int pixelSize = h - 3;
             pixelSize = QMIN(pixelSize, fi.pixelSize());  // don't make it too large

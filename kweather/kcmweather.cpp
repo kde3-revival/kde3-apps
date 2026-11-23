@@ -28,7 +28,6 @@
 #include <qhbox.h>
 #include <qlabel.h>
 #include <qlayout.h>
-#include <qlineedit.h>
 #include <qlistbox.h>
 #include <qlocale.h>
 #include <qpushbutton.h>
@@ -46,6 +45,7 @@
 #include <kdialog.h>
 #include <kglobal.h>
 #include <kio/job.h>
+#include <klineedit.h>
 #include <klocale.h>
 #include <kurl.h>
 #include <kurlrequester.h>
@@ -54,6 +54,7 @@
 #include "json.h"
 #include "kcmweather.h"
 #include "weathermodels.h"
+#include "weatherservers.h"
 #include "weatherservice_stub.h"
 
 namespace
@@ -70,8 +71,6 @@ const char *const precipitationUnits[] = {
   "mm", I18N_NOOP( "millimeters" ), "inch", I18N_NOOP( "inches" ), 0 };
 const char *const pressureUnits[] = {
   "hPa", I18N_NOOP( "hectopascals (hPa)" ), "inHg", I18N_NOOP( "inches of mercury (inHg)" ), 0 };
-
-const char geocodingUrl[] = "https://geocoding-api.open-meteo.com/v1/search";
 
 }
 
@@ -98,7 +97,9 @@ KCMWeather::KCMWeather( QWidget *parent, const char *name )
   mLocationLabel = new QLabel( box );
   QHBox *searchBox = new QHBox( box );
   searchBox->setSpacing( KDialog::spacingHint() );
-  mSearch = new QLineEdit( searchBox );
+  mSearch = new KLineEdit( searchBox );
+  // Return searches; it must not close the dialog as well
+  mSearch->setTrapReturnKey( true );
   mSearchButton = new QPushButton( i18n( "&Search" ), searchBox );
   QWhatsThis::add( mSearch, i18n( "Type the name of a city or village and press "
       "Search, then choose it in the list. Only the coordinates of the place "
@@ -252,11 +253,15 @@ void KCMWeather::searchLocation()
     mSearchJob->kill();
 
   QString language = KGlobal::locale()->language().left( 2 );
-  KURL url( QString::fromLatin1( geocodingUrl ) );
+  KConfig service( "kweatherservicerc", true );
+  service.setGroup( "Open-Meteo" );
+  KURL url( service.readEntry( "geocoding_url", WeatherServers::geocoding() ) );
   url.setQuery( "name=" + KURL::encode_string( text, 106 /* UTF-8 */ )
                 + "&count=20&format=json&language=" + KURL::encode_string( language ) );
   kdDebug() << "Geocoding " << url.url() << endl;
   mSearchJob = KIO::storedGet( url, true, false );
+  // as in WeatherLib::startJob(): kio_http cannot inflate HTTP's deflate
+  mSearchJob->addMetaData( "AllowCompressedPage", "false" );
   connect( mSearchJob, SIGNAL( result( KIO::Job* ) ), SLOT( searchDone( KIO::Job* ) ) );
   mResults->clear();
   mPlaces.clear();

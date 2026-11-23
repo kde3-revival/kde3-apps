@@ -31,11 +31,13 @@
 #include "weatherservice.h"
 #include "weathericons.h"
 #include "weathermodels.h"
+#include "weatherservers.h"
 
 WeatherService::WeatherService(QObject *parent, const char *name) : QObject (parent, name),  DCOPObject("WeatherService")
 {
 	kdDebug(12006) << "Starting new service... " << endl;
 
+	m_config = new KConfig("kweatherservicerc");
 	m_weatherLib = new WeatherLib(this, "WeatherLib");
 	connect(m_weatherLib, SIGNAL(fileUpdating( const QString&)),
 			SLOT(updating( const QString&)));
@@ -46,7 +48,7 @@ WeatherService::WeatherService(QObject *parent, const char *name) : QObject (par
 
 	reloadSettings();
 
-	KConfig *conf = kapp->config();
+	KConfig *conf = m_config;
 	conf->setGroup("WEATHERSTATIONS");
 	QStringList stations =conf->readListEntry("stations");
         QStringList::Iterator it = stations.begin();
@@ -57,6 +59,7 @@ WeatherService::WeatherService(QObject *parent, const char *name) : QObject (par
 WeatherService::~WeatherService()
 {
 	kdDebug(12006) << "Going away... " << endl;
+	delete m_config;
 	// Don't need to call saveSettings() because WeatherService::exit
         // already does that. Plus it wouldn't work here anyway because
         // we can't get the config after calling kapp->quit();
@@ -64,8 +67,10 @@ WeatherService::~WeatherService()
 
 void WeatherService::reloadSettings()
 {
-	KConfig *conf = kapp->config();
+	KConfig *conf = m_config;
 	conf->reparseConfiguration();
+	conf->setGroup("Open-Meteo");
+	m_weatherLib->setServer(conf->readEntry("forecast_url", WeatherServers::forecast()));
 	conf->setGroup("Units");
 	bool metric = KGlobal::locale()->measureSystem() == KLocale::Metric;
 	m_weatherLib->setUnits(
@@ -224,7 +229,7 @@ void WeatherService::forceUpdate(const QString &stationID)
 void WeatherService::removeStation(const QString &stationID)
 {
 	m_weatherLib->remove(stationID);
-	KConfig *conf = kapp->config();
+	KConfig *conf = m_config;
 	conf->deleteGroup("Location " + stationID);
 	saveSettings();
 }
@@ -238,7 +243,7 @@ void WeatherService::addStation(const QString &stationID)
 void WeatherService::addLocation(const QString &stationID, const QString &name,
                                  const QString &country)
 {
-	KConfig *conf = kapp->config();
+	KConfig *conf = m_config;
 	conf->setGroup("Location " + stationID);
 	conf->writeEntry("name", name);
 	conf->writeEntry("country", country);
@@ -258,7 +263,7 @@ QStringList WeatherService::listStations()
 
 void WeatherService::saveSettings()
 {
-	KConfig *conf = kapp->config();
+	KConfig *conf = m_config;
 	conf->setGroup("WEATHERSTATIONS");
 	conf->writeEntry( "stations", m_weatherLib->stations());
 	conf->sync();
@@ -266,7 +271,7 @@ void WeatherService::saveSettings()
 
 QString WeatherService::stationName(const QString &stationID)
 {
-	KConfig *conf = kapp->config();
+	KConfig *conf = m_config;
 	conf->setGroup("Location " + stationID);
 	QString name = conf->readEntry("name");
 	if (!name.isEmpty())
@@ -276,7 +281,7 @@ QString WeatherService::stationName(const QString &stationID)
 
 QString WeatherService::stationCountry(const QString &stationID)
 {
-	KConfig *conf = kapp->config();
+	KConfig *conf = m_config;
 	conf->setGroup("Location " + stationID);
 	return conf->readEntry("country");
 }

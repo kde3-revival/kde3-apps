@@ -162,7 +162,7 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
         QStringList days = service->dailyForecast(location);
         if (!days.isEmpty()) {
             top->addWidget(heading(this, i18n("Next 7 days")));
-            QGridLayout *grid = new QGridLayout(top, days.count(), 6, 2);
+            QGridLayout *grid = new QGridLayout(top, days.count(), 6, KDialog::spacingHint());
             grid->setColStretch(5, 1);
             int row = 0;
             QDate today = QDate::currentDate();
@@ -183,8 +183,6 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
                 grid->addWidget(label(this, rain, Qt::AlignRight), row, 4);
                 grid->addWidget(label(this, field(f, 6)), row, 5);
             }
-            grid->setColSpacing(2, 40);
-            grid->setColSpacing(4, 60);
         }
         if (!error.isEmpty())
             top->addWidget(label(this, i18n("The last update failed: %1").arg(error)));

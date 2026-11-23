@@ -32,11 +32,11 @@
 class QButtonGroup;
 class QCheckBox;
 class QLabel;
-class QLineEdit;
 class QListBox;
 class QPushButton;
 class KColorButton;
 class KComboBox;
+class KLineEdit;
 class KURLRequester;
 class WeatherService_stub;
 
@@ -81,7 +81,7 @@ class KCMWeather : public KCModule
 
     WeatherService_stub *mWeatherService;
 
-    QLineEdit *mSearch;
+    KLineEdit *mSearch;
     QPushButton *mSearchButton;
     QListBox *mResults;
     QLabel *mLocationLabel;
