@@ -198,6 +198,9 @@ bool PopplerGenerator::loadDocument( const QString & filePath, QValueVector<KPDF
     // build Pages: sizes as shown, with the page's own rotation applied
     uint pageCount = poppler_document_get_n_pages( m_doc );
     m_pageCount = pageCount;
+    m_rotations.resize( pageCount );
+    for ( uint i = 0; i < pageCount; i++ )
+        m_rotations[i] = -1;
     pagesVector.resize( pageCount );
     for ( uint i = 0; i < pageCount ; i++ )
     {
@@ -276,7 +279,7 @@ const DocumentSynopsis * PopplerGenerator::generateDocumentSynopsis()
         return NULL;
     }
     docSyn = DocumentSynopsis();
-    addSynopsisChildren( &docSyn, iter );
+    addSynopsisChildren( &docSyn, iter, 0 );
     poppler_index_iter_free( iter );
     docLock.unlock();
 
@@ -973,8 +976,23 @@ DocumentViewport PopplerGenerator::viewportFromDest( PopplerDest * dest )
     }
     if ( useLeft || useTop )
     {
-        double x = useLeft ? dest->left / w : 0.0,
-               y = useTop ? ( h - dest->top ) / h : 0.0;
+        // PDF user space -> the page as shown: relative to the crop box,
+        // turned by the page rotation, origin at the top left corner.  A
+        // coordinate the destination leaves out is the crop box edge.
+        PopplerRectangle crop;
+        poppler_page_get_crop_box( page, &crop );
+        double cw = crop.x2 - crop.x1, ch = crop.y2 - crop.y1;
+        double u = useLeft ? dest->left - crop.x1 : 0.0,
+               v = useTop ? dest->top - crop.y1 : ch;
+        double dx, dy;
+        switch ( pageRotation( page, vp.pageNumber ) )
+        {
+            case 90:  dx = v;      dy = u;      break;
+            case 180: dx = cw - u; dy = v;      break;
+            case 270: dx = ch - v; dy = cw - u; break;
+            default:  dx = u;      dy = ch - v; break;
+        }
+        double x = dx / w, y = dy / h;
         vp.rePos.normalizedX = QMAX( 0.0, QMIN( 1.0, x ) );
         vp.rePos.normalizedY = QMAX( 0.0, QMIN( 1.0, y ) );
         vp.rePos.enabled = true;
@@ -983,7 +1001,44 @@ DocumentViewport PopplerGenerator::viewportFromDest( PopplerDest * dest )
     return vp;
 }
 
-void PopplerGenerator::addSynopsisChildren( QDomNode * parent, PopplerIndexIter * iter )
+int PopplerGenerator::pageRotation( PopplerPage * page, int pageNumber )
+// note: MUTEX is LOCKED while calling this
+{
+    if ( pageNumber >= 0 && pageNumber < (int)m_rotations.size() && m_rotations[pageNumber] >= 0 )
+        return m_rotations[pageNumber];
+
+    // poppler-glib does not tell the /Rotate of a page, but
+    // poppler_page_add_annot() takes the rectangle of the annotation in the
+    // page as shown and turns it back into PDF space: a square annotation
+    // put for a moment at the bottom left corner of the page as shown lands
+    // at the PDF corner that went there
+    int rotation = 0;
+    PopplerRectangle crop;
+    poppler_page_get_crop_box( page, &crop );
+    double cw = crop.x2 - crop.x1, ch = crop.y2 - crop.y1;
+    PopplerRectangle probe;
+    probe.x1 = 0.5;
+    probe.y1 = 0.5;
+    probe.x2 = 1.5;
+    probe.y2 = 1.5;
+    PopplerAnnot * annot = cw > 4 && ch > 4 ? poppler_annot_square_new( m_doc, &probe ) : 0;
+    if ( annot )
+    {
+        poppler_page_add_annot( page, annot );
+        PopplerRectangle raw;
+        poppler_annot_get_rectangle( annot, &raw );
+        bool right = ( raw.x1 + raw.x2 ) / 2 - crop.x1 > cw / 2,
+             top = ( raw.y1 + raw.y2 ) / 2 - crop.y1 > ch / 2;
+        rotation = !right && !top ? 0 : ( right && !top ? 90 : ( right && top ? 180 : 270 ) );
+        poppler_page_remove_annot( page, annot );
+        g_object_unref( annot );
+    }
+    if ( pageNumber >= 0 && pageNumber < (int)m_rotations.size() )
+        m_rotations[pageNumber] = rotation;
+    return rotation;
+}
+
+void PopplerGenerator::addSynopsisChildren( QDomNode * parent, PopplerIndexIter * iter, int depth )
 // note: MUTEX is LOCKED while calling this
 {
     do
@@ -1029,10 +1084,11 @@ void PopplerGenerator::addSynopsisChildren( QDomNode * parent, PopplerIndexIter 
         item.setAttribute( "Open", QVariant( (bool)poppler_index_iter_is_open( iter ) ).toString() );
 
         // 3. recursively descend over children
-        PopplerIndexIter * child = poppler_index_iter_get_child( iter );
+        // (a bounded depth: the outline comes from the file)
+        PopplerIndexIter * child = depth < 64 ? poppler_index_iter_get_child( iter ) : 0;
         if ( child )
         {
-            addSynopsisChildren( &item, child );
+            addSynopsisChildren( &item, child, depth + 1 );
             poppler_index_iter_free( child );
         }
     }

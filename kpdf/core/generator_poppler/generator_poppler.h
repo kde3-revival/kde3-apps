@@ -16,6 +16,7 @@
 #include <qcolor.h>
 #include <qstring.h>
 #include <qthread.h>
+#include <qmemarray.h>
 #include <qvaluevector.h>
 #include "core/generator.h"
 #include "core/document.h"
@@ -94,7 +95,8 @@ class PopplerGenerator : public Generator
         KPDFTextPage * textPage( int pageNumber );
         KPDFLink * makeLink( PopplerAction * action );
         DocumentViewport viewportFromDest( PopplerDest * dest );
-        void addSynopsisChildren( QDomNode * parent, PopplerIndexIter * iter );
+        void addSynopsisChildren( QDomNode * parent, PopplerIndexIter * iter, int depth );
+        int pageRotation( PopplerPage * page, int pageNumber );
         void addTransition( int pageNumber, KPDFPage * page );
         QString infoString( const char * property ) const;
         QString infoDate( const char * property ) const;
@@ -105,6 +107,7 @@ class PopplerGenerator : public Generator
         QMutex docLock;
         PopplerDocument * m_doc;
         int m_pageCount;
+        QMemArray< int > m_rotations;
         QColor paperColor;
         bool m_usedPassword;
 
