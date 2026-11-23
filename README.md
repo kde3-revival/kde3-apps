@@ -34,6 +34,12 @@ From KDE 3.5.10 kdegraphics:
 | `ksnapshot/`  | KSnapshot      | Screen capture: full screen, window or region                   |
 | `kview/`      | KView          | Image viewer, also an embeddable KPart, with plugins            |
 
+From KDE 3.5.10 kdetoys:
+
+| Directory     | Application    | What it is                                                      |
+|---------------|----------------|-----------------------------------------------------------------|
+| `kweather/`   | KWeather       | Weather applet of the panel and DCOP weather service, forecasts from Open-Meteo |
+
 The handbook of each application is in `doc/<application>/`
 (`doc/kinfocenter/blockdevices/` belongs to KDiskFree).
 

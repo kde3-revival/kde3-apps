@@ -25,12 +25,12 @@
 
 <legalnotice>&GPLNotice;</legalnotice>
 
-<date>2004-05-31</date>
+<date>2026-11-23</date>
 <releaseinfo>3.00.00</releaseinfo>
 
 <abstract>
 <para>
-KWeather is part of the kdetoys package.
+KWeather comes from the kdetoys package of KDE 3.5 and gets the weather from Open-Meteo.
 </para>
 </abstract>
 
@@ -45,13 +45,18 @@ KWeather is part of the kdetoys package.
 <chapter id="introduction">
 <title>Introduction</title>
 
-<para>KWeather is an application that provides both a panel icon,
-allowing you to watch the weather as reported by a local weather
-station,  and providing a weather service that can track multiple
-weather  stations and provide this information to other
-applications including &konqueror;'s sidebar and &kontact;'s
-summary page.</para>
+<para>KWeather shows the weather in the panel: an icon and the
+temperature of the place you choose.  A click opens the forecast: the
+current weather, the next 12 hours and the next 7 days.  A weather
+service (KWeatherService) fetches the data and offers it to other
+programs through &DCOP;.</para>
 
+<para>The weather comes from <ulink
+url="https://open-meteo.com/">Open-Meteo</ulink>, which needs no
+account.  Only the coordinates of the chosen place and the name of the
+forecast model are sent to it; the name typed in the place search is
+sent to its geocoding service.  The data of Open-Meteo is under the
+Creative Commons Attribution 4.0 licence.</para>
 </chapter>
 
 <chapter id="adding-applet">
@@ -59,148 +64,93 @@ summary page.</para>
 
 <para>&RMB; click on an empty space in the panel and choose
 <menuchoice><guimenu>Add</guimenu><guisubmenu>Applet</guisubmenu>
-<guimenuitem>KWeather</guimenuitem></menuchoice></para>
+<guimenuitem>Weather Report</guimenuitem></menuchoice>.  Click the icon
+to choose the place: type its name, press <guibutton>Search</guibutton>
+and choose it in the list.  The place is not looked up
+automatically.</para>
 
-<para>A configuration dialog will open up.  Initially the only
-configuration required to make KWeather work is the <guilabel>ICAO
-location code:</guilabel>.</para>
-
-<para>This is a four character code used by the weather reporting
-service to uniquely identify weather stations around the world.</para>
-
-<para>As it's unlikely that most people will happen to know this
-directly, there is a link to a search engine where you can look it
-up.</para>
-
-<note><para>While the weather stations available are fairly
-comprehensive, not every town in every country will be represented,
-simply because not every town has an appropriate weather station.  If
-your own town is not represented, you should choose the one nearest
-you.  Since flying planes safely requires accurate weather data, most
-towns with an airport will be in the list, so a good bet
-is to look for the nearest airport to you.</para></note>
-
-<para>At this point, you can press the <guibutton>OK</guibutton> button
-and the dialog will close.  You will now have an icon displaying the
-current weather graphically on your panel.  Clicking it once will open
-a window that shows the weather in detail.</para>
-
-<para>Further configuration is described in the next chapter.</para>
-
+<para>A click on the icon opens the forecast and a second click, or
+<keycap>Esc</keycap>, closes it.  The &RMB; menu has <guimenuitem>Update
+Now</guimenuitem> and the settings.  The weather is updated every 15
+minutes.</para>
 </chapter>
 
 <chapter id="configuring-kweather">
 <title>Configuring KWeather</title>
 
-<sect1 id="display">
-<title>Display</title>
+<variablelist>
+<varlistentry>
+<term><guilabel>Location</guilabel></term>
+<listitem><para>The place of the weather, found by its name.  The list
+shows the region, the country, the coordinates and the elevation, to
+tell places of the same name apart.</para></listitem>
+</varlistentry>
 
-<variablelist>
 <varlistentry>
-<term><guilabel>Weather Station Options</guilabel></term>
-<listitem>
-  <variablelist>
-  <varlistentry>
-  <term><guilabel>ICAO location code:</guilabel></term>
-  <listitem><para>ICAO stands for the International Civil Aviation
-Organization.  The ICAO location code is a four character
-alphanumeric code that uniquely identifies airports worldwide.  The first
-two letters of the ICAO code ususally identify the coutry.  However, codes for 
-airports in the United States usually start with "K", followed by a three 
-character IATA (International Air Transport Assocation) code.  For example,
-KORD is the ICAO code for Ohare International Airport in Chicago, Illinois.  
-If you don't know the ICAO code for the airport nearest to you, you can click
-on the link labeled <guilabel>Lookup Your ICAO Code</guilabel> to use a web based
-search engine to find it.</para></listitem>
-  </varlistentry>
-  </variablelist>
-</listitem>
+<term><guilabel>Model</guilabel></term>
+<listitem><para>The weather model of the forecast.  The default is the
+high resolution model of the European Centre for Medium-Range Weather
+Forecasts, ECMWF IFS HRES (9 km).  ICON-EU (7 km, 5 days) is the
+European model of the German weather service; the hybrid uses ICON-EU
+for the current weather and the next hours and the ECMWF model for the
+days.  <quote>Open-Meteo best match</quote> lets Open-Meteo choose a
+model for the place.</para>
+<para>Which model forecasts best depends on the place.  The script
+<filename>kweather/tools/forecast-accuracy.py</filename> of the sources
+compares the forecasts of the past weeks with what a weather station
+near you measured.</para></listitem>
 </varlistentry>
+
 <varlistentry>
-<term><guilabel>Panel Display Options</guilabel></term>
-<listitem>
-  <variablelist>
-  <varlistentry>
-  <term><guilabel>Show icon only</guilabel></term>
-  <term><guilabel>Show icon and temperature</guilabel></term>
-  <term><guilabel>Show icon, temperature, wind and pressure information</guilabel></term>
-  <listitem><para>You can choose here if the temperature should be
-displayed beside the icon, or if the current wind speed, direction, and
-air pressure are also displayed.</para>
-  <para>The icon is always shown.</para>
-  </listitem>
-  </varlistentry>
-  </variablelist>
-</listitem>
+<term><guilabel>Temperature</guilabel>, <guilabel>Wind speed</guilabel>,
+<guilabel>Precipitation</guilabel>, <guilabel>Pressure</guilabel></term>
+<listitem><para>The units.  The defaults follow the measure system of
+the regional settings (Celsius, km/h, millimeters and hectopascals for
+the metric system).</para></listitem>
 </varlistentry>
+
 <varlistentry>
-<term><guilabel>Logging Options</guilabel></term>
-<listitem>
-<variablelist>
-<varlistentry>
-<term><guilabel>Enable logging</guilabel></term>
-<listitem><para>By default KWeather does not retain old weather
-information, and each time it updates the weather the old information
-is discarded.  If you wish instead to keep a record of the weather,
-enable this option.  Then, each time the weather is checked, KWeather
-will append a new line to the log file containing the current weather
-conditions in comma separated value form.  The information written 
-will be the date, wind speed and direction, temperature, pressure, cover,
-visibility, and "current weather".</para></listitem>
+<term><guilabel>Panel Display</guilabel></term>
+<listitem><para>Whether the panel shows only the icon, the icon and the
+temperature (the default), or also the wind and the pressure, and the
+color of the text if it should not be the color of the
+panel.</para></listitem>
 </varlistentry>
+
 <varlistentry>
-<term><guilabel>Log file</guilabel></term>
-<listitem><para>If you have enabled the <guilabel>Enable
-logging</guilabel> check box, this option will become available.  Enter
-or  browse to the location you would like KWeather to keep it's log
-file.</para>
-</listitem>
+<term><guilabel>Notify me when rain is expected in the next
+hour</guilabel></term>
+<listitem><para>A notification (by default a passive popup) when the
+forecast has rain or snow for the coming hour; once for each rain
+spell.  How it is shown can be changed in the &kcontrolcenter;, under
+<guilabel>System Notifications</guilabel>.</para></listitem>
+</varlistentry>
+
+<varlistentry>
+<term><guilabel>Log the weather to a file</guilabel></term>
+<listitem><para>Appends the current weather to a file at each update,
+in comma separated values: the date, the wind, the temperature, the
+pressure, the cloud cover, an empty field (the visibility of the old
+METAR reports) and the weather.</para></listitem>
 </varlistentry>
 </variablelist>
-</listitem>
-</varlistentry>
-</variablelist>
-
-</sect1>
-
-<sect1 id="weather-service">
-<title><guilabel>Weather Service</guilabel></title>
-
-<variablelist>
-<varlistentry>
-<term><guilabel>Station Manager</guilabel></term>
-<listitem><para></para></listitem>
-</varlistentry>
-<varlistentry>
-<term><guibutton>Update All Stations</guibutton></term>
-<listitem><para>Update all the listed stations
-immediately.</para></listitem>
-</varlistentry>
-<varlistentry>
-<term><guibutton>Exit Weather Service</guibutton></term>
-<listitem><para>Stop fetching weather updates for all
-listed stations, and stop providing weather
-information to the &konqueror; sidebar and &kontact;</para></listitem>
-</varlistentry> </variablelist> </sect1>
-
 </chapter>
 
 <chapter id="kweather-interfaces">
-<title>KWeather Interfaces</title>
+<title>The Weather Service</title>
 
-<para>While the most obvious KWeather interface is the panel icon,
-there are several other places where you can access KWeather's
-information.  These are particularly useful if you need to watch
-multiple weather stations. While &kweather; allows you to track
-multiple weather stations, the panel icon displays only one at a
-time.</para>
+<para>KWeatherService is started when needed and answers &DCOP; calls,
+for example:</para>
 
-<para>These additional services are plug-ins to their respective
-applications, and not provided with KWeather itself.</para>
+<screen><userinput><command>dcop</command> KWeatherService WeatherService temperature 44.4323,26.1063,ecmwf_ifs</userinput></screen>
 
-<!-- FIXME: write some stuff and show some screenies of the konq and
-kontact plugins -->
-
+<para>A location is written as
+<replaceable>latitude</replaceable>,<replaceable>longitude</replaceable>,<replaceable>model</replaceable>.
+Besides the current weather (<function>temperature</function>,
+<function>wind</function>, <function>pressure</function>, ...) there are
+<function>hourlyForecast</function>, <function>dailyForecast</function>
+and <function>rainNextHour</function>; <filename>weatherservice.h</filename>
+describes them.</para>
 </chapter>
 
 <chapter id="credits-and-licenses">
@@ -208,6 +158,10 @@ kontact plugins -->
 
 <para>KWeather copyright &copy; Ian Reinhart Geiser
 <email>geiseri@users.sourceforge.net</email></para>
+
+<para>Forecasts from Open-Meteo: the KDE3 revival authors, 2026.
+Weather data by <ulink url="https://open-meteo.com/">Open-Meteo.com</ulink>
+(CC BY 4.0).</para>
 
 <variablelist>
 <title>Contributors</title>
