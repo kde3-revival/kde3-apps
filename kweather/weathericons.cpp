@@ -9,12 +9,20 @@
 
 #include "weathericons.h"
 
+#include <qbitmap.h>
 #include <qimage.h>
+#include <qmap.h>
+#include <qpainter.h>
+#include <qpixmap.h>
+#include <qpointarray.h>
 
 #include <kglobal.h>
+#include <kglobalsettings.h>
 #include <kiconloader.h>
 #include <klocale.h>
 #include <kstandarddirs.h>
+
+#include <math.h>
 
 namespace
 {
@@ -57,6 +65,297 @@ const Icon *findIcon(const QString &name)
         if (name == QString::fromLatin1(i->name))
             return i;
     return 0;
+}
+
+}
+
+namespace
+{
+
+// The icons are drawn at four times their size, with a mask, and reduced
+// with a box filter on premultiplied alpha: Qt 3's QPainter does not
+// antialias.  Coordinates are in a 100 x 100 square.
+class Canvas
+{
+public:
+    explicit Canvas(int size)
+        : m_size(size), m_scale(size * 4 / 100.0),
+          m_pix(size * 4, size * 4), m_mask(size * 4, size * 4)
+    {
+        m_pix.fill(Qt::black);
+        m_mask.fill(Qt::color0);
+        m_p.begin(&m_pix);
+        m_m.begin(&m_mask);
+    }
+
+    int s(double v) const { return static_cast<int>(v * m_scale + 0.5); }
+
+    void disc(double cx, double cy, double r, const QColor &c)
+    {
+        QRect rect(s(cx - r), s(cy - r), s(2 * r), s(2 * r));
+        m_p.setPen(Qt::NoPen);
+        m_p.setBrush(c);
+        m_p.drawEllipse(rect);
+        m_m.setPen(Qt::NoPen);
+        m_m.setBrush(Qt::color1);
+        m_m.drawEllipse(rect);
+    }
+
+    void cut(double cx, double cy, double r)
+    {
+        QRect rect(s(cx - r), s(cy - r), s(2 * r), s(2 * r));
+        m_m.setPen(Qt::NoPen);
+        m_m.setBrush(Qt::color0);
+        m_m.drawEllipse(rect);
+    }
+
+    void box(double x, double y, double w, double h, double radius, const QColor &c)
+    {
+        QRect rect(s(x), s(y), s(w), s(h));
+        int rx = w > 0 ? static_cast<int>(200 * radius / w) : 0;
+        int ry = h > 0 ? static_cast<int>(200 * radius / h) : 0;
+        m_p.setPen(Qt::NoPen);
+        m_p.setBrush(c);
+        m_p.drawRoundRect(rect, QMIN(rx, 99), QMIN(ry, 99));
+        m_m.setPen(Qt::NoPen);
+        m_m.setBrush(Qt::color1);
+        m_m.drawRoundRect(rect, QMIN(rx, 99), QMIN(ry, 99));
+    }
+
+    void line(double x1, double y1, double x2, double y2, double width, const QColor &c)
+    {
+        m_p.setPen(QPen(c, uint(QMAX(1, s(width))), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        m_p.drawLine(s(x1), s(y1), s(x2), s(y2));
+        m_m.setPen(QPen(Qt::color1, uint(QMAX(1, s(width))), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        m_m.drawLine(s(x1), s(y1), s(x2), s(y2));
+    }
+
+    void polygon(const double *xy, int points, const QColor &c)
+    {
+        QPointArray a(points);
+        for (int i = 0; i < points; ++i)
+            a.setPoint(i, s(xy[2 * i]), s(xy[2 * i + 1]));
+        m_p.setPen(Qt::NoPen);
+        m_p.setBrush(c);
+        m_p.drawPolygon(a);
+        m_m.setPen(Qt::NoPen);
+        m_m.setBrush(Qt::color1);
+        m_m.drawPolygon(a);
+    }
+
+    void text(const QString &t, const QColor &c)
+    {
+        QFont f = KGlobalSettings::generalFont();
+        f.setBold(true);
+        f.setPixelSize(s(46));
+        m_p.setFont(f);
+        m_p.setPen(c);
+        m_p.drawText(QRect(0, s(20), s(100), s(70)), Qt::AlignCenter, t);
+        m_m.setFont(f);
+        m_m.setPen(Qt::color1);
+        m_m.drawText(QRect(0, s(20), s(100), s(70)), Qt::AlignCenter, t);
+    }
+
+    QPixmap result()
+    {
+        m_p.end();
+        m_m.end();
+        QImage big = m_pix.convertToImage().convertDepth(32);
+        QImage mask = m_mask.convertToImage();
+        QImage out(m_size, m_size, 32);
+        out.setAlphaBuffer(true);
+        for (int y = 0; y < m_size; ++y) {
+            for (int x = 0; x < m_size; ++x) {
+                int r = 0, g = 0, b = 0, a = 0;
+                for (int j = 0; j < 4; ++j) {
+                    for (int i = 0; i < 4; ++i) {
+                        int bx = x * 4 + i, by = y * 4 + j;
+                        if (!mask.pixelIndex(bx, by))
+                            continue;
+                        QRgb c = big.pixel(bx, by);
+                        r += qRed(c);
+                        g += qGreen(c);
+                        b += qBlue(c);
+                        ++a;
+                    }
+                }
+                out.setPixel(x, y, a ? qRgba(r / a, g / a, b / a, a * 255 / 16)
+                                     : qRgba(0, 0, 0, 0));
+            }
+        }
+        QPixmap pix;
+        pix.convertFromImage(out);
+        return pix;
+    }
+
+private:
+    int m_size;
+    double m_scale;
+    QPixmap m_pix;
+    QBitmap m_mask;
+    QPainter m_p;
+    QPainter m_m;
+};
+
+// a palette that reads on light and on dark backgrounds: every shape has a
+// darker rim
+const QColor sunFill(255, 196, 30), sunRim(214, 128, 0);
+const QColor moonFill(246, 236, 190), moonRim(168, 150, 90);
+const QColor cloudFill(246, 248, 250), cloudRim(124, 136, 150);
+const QColor greyFill(196, 204, 213), greyRim(98, 110, 124);
+const QColor darkFill(132, 142, 156), darkRim(70, 78, 90);
+const QColor rain(48, 132, 220), snowColor(110, 170, 235), boltFill(255, 204, 0),
+             boltRim(176, 120, 0), fog(150, 160, 172);
+
+enum CloudKind { Light, Grey, Dark };
+
+void sun(Canvas &c, double cx, double cy, double r)
+{
+    for (int i = 0; i < 8; ++i) {
+        double a = i * 3.14159265 / 4;
+        c.line(cx + cos(a) * r * 1.35, cy + sin(a) * r * 1.35,
+               cx + cos(a) * r * 1.8, cy + sin(a) * r * 1.8, r * 0.28, sunRim);
+    }
+    c.disc(cx, cy, r, sunRim);
+    c.disc(cx, cy, r * 0.84, sunFill);
+}
+
+void moon(Canvas &c, double cx, double cy, double r)
+{
+    c.disc(cx, cy, r, moonRim);
+    c.disc(cx, cy, r * 0.86, moonFill);
+    c.cut(cx + r * 0.55, cy - r * 0.4, r * 0.8);
+}
+
+/** A cloud of width w, its flat bottom at y = bottom. */
+void cloud(Canvas &c, double cx, double bottom, double w, CloudKind kind)
+{
+    const QColor &fill = kind == Light ? cloudFill : kind == Grey ? greyFill : darkFill;
+    const QColor &rim = kind == Light ? cloudRim : kind == Grey ? greyRim : darkRim;
+    for (int pass = 0; pass < 2; ++pass) {
+        double o = pass == 0 ? w * 0.045 : 0;       // the rim, then the inside
+        const QColor &col = pass == 0 ? rim : fill;
+        c.disc(cx - w * 0.24, bottom - w * 0.17, w * 0.17 + o, col);
+        c.disc(cx + w * 0.02, bottom - w * 0.27, w * 0.25 + o, col);
+        c.disc(cx + w * 0.27, bottom - w * 0.16, w * 0.16 + o, col);
+        c.box(cx - w * 0.42 - o, bottom - w * 0.2 - o, w * 0.84 + 2 * o, w * 0.2 + 2 * o,
+              w * 0.1 + o, col);
+    }
+}
+
+void drops(Canvas &c, int n, double top, bool small)
+{
+    double x0 = n == 2 ? 38 : 30;
+    for (int i = 0; i < n; ++i) {
+        double x = x0 + i * 20;
+        if (small) {
+            c.disc(x, top + 8, 4.2, rain);
+            c.disc(x - 7, top + 22, 4.2, rain);
+        } else {
+            c.line(x, top + 2, x - 8, top + 24, 7.5, rain);
+        }
+    }
+}
+
+void flake(Canvas &c, double cx, double cy, double r)
+{
+    for (int i = 0; i < 3; ++i) {
+        double a = i * 3.14159265 / 3 + 3.14159265 / 2;
+        c.line(cx - cos(a) * r, cy - sin(a) * r, cx + cos(a) * r, cy + sin(a) * r, r * 0.42, snowColor);
+    }
+}
+
+void bolt(Canvas &c)
+{
+    static const double rim[] = { 52, 56, 37, 82, 49, 82, 42, 100, 66, 72, 54, 72, 62, 56 };
+    static const double fill[] = { 53, 60, 42, 79, 52, 79, 47, 93, 61, 75, 50, 75, 57, 60 };
+    c.polygon(rim, 7, boltRim);
+    c.polygon(fill, 7, boltFill);
+}
+
+QPixmap drawIcon(const QString &name, int size)
+{
+    Canvas c(size);
+    bool night = name.endsWith("-night");
+    QString base = night ? name.left(name.length() - 6) : name;
+    if (base.endsWith("-day"))
+        base = base.left(base.length() - 4);
+
+    if (base == "weather-clear") {
+        if (night)
+            moon(c, 50, 50, 34);
+        else
+            sun(c, 50, 50, 24);
+    } else if (base == "weather-few-clouds" || base == "weather-clouds") {
+        bool few = base == "weather-few-clouds";
+        if (night)
+            moon(c, 36, 34, few ? 24 : 20);
+        else
+            sun(c, 37, 37, few ? 17 : 15);
+        cloud(c, few ? 60 : 56, 84, few ? 64 : 76, Light);
+    } else if (base == "weather-overcast") {
+        cloud(c, 40, 62, 60, Grey);
+        cloud(c, 58, 84, 76, Light);
+    } else if (base == "weather-fog") {
+        cloud(c, 50, 56, 74, Grey);
+        c.line(18, 70, 82, 70, 6, fog);
+        c.line(26, 82, 90, 82, 6, fog);
+        c.line(12, 94, 70, 94, 6, fog);
+    } else if (base == "weather-showers-scattered") {
+        cloud(c, 50, 64, 80, Grey);
+        drops(c, 3, 68, true);
+    } else if (base == "weather-showers") {
+        if (name != base) {         // showers by day or night: the sun or moon behind
+            if (night)
+                moon(c, 32, 30, 20);
+            else
+                sun(c, 32, 32, 14);
+            cloud(c, 58, 64, 70, Grey);
+            drops(c, 2, 68, false);
+        } else {
+            cloud(c, 50, 64, 80, Grey);
+            drops(c, 3, 68, false);
+        }
+    } else if (base == "weather-freezing-rain") {
+        cloud(c, 50, 64, 80, Grey);
+        c.line(36, 70, 28, 92, 7.5, rain);
+        flake(c, 64, 82, 11);
+    } else if (base == "weather-snow" || base == "weather-snow-scattered") {
+        bool scattered = base == "weather-snow-scattered";
+        if (scattered && name != base) {
+            if (night)
+                moon(c, 32, 30, 20);
+            else
+                sun(c, 32, 32, 14);
+            cloud(c, 58, 64, 70, Light);
+        } else {
+            cloud(c, 50, 64, 80, Light);
+        }
+        if (scattered) {
+            flake(c, 40, 80, 10);
+            flake(c, 66, 86, 10);
+        } else {
+            flake(c, 28, 78, 10);
+            flake(c, 52, 88, 10);
+            flake(c, 74, 78, 10);
+        }
+    } else if (base == "weather-storm") {
+        if (night)
+            moon(c, 30, 28, 18);
+        cloud(c, 50, 62, 82, Dark);
+        bolt(c);
+    } else if (base == "weather-hail") {
+        cloud(c, 50, 62, 82, Dark);
+        bolt(c);
+        c.disc(28, 80, 6, greyRim);
+        c.disc(28, 80, 4.5, Qt::white);
+        c.disc(76, 86, 6, greyRim);
+        c.disc(76, 86, 4.5, Qt::white);
+    } else {                        // no data
+        cloud(c, 50, 80, 84, Grey);
+        c.text(QString::fromLatin1("?"), darkRim);
+    }
+    return c.result();
 }
 
 }
@@ -158,6 +457,9 @@ QString WeatherIcons::fallbackFile(const QString &name)
 
 QPixmap WeatherIcons::load(const QString &name, int size)
 {
+    if (size <= 0)
+        size = 32;
+    // the icon theme first: what the user chose
     KIconLoader *loader = KGlobal::iconLoader();
     QPixmap pix = loader->loadIcon(name, KIcon::Panel, size,
                                    KIcon::DefaultState, 0, true);
@@ -165,11 +467,16 @@ QPixmap WeatherIcons::load(const QString &name, int size)
     if (pix.isNull() && icon && icon->alternative)
         pix = loader->loadIcon(QString::fromLatin1(icon->alternative),
                                KIcon::Panel, size, KIcon::DefaultState, 0, true);
-    if (pix.isNull()) {
-        QImage image(fallbackFile(name));
-        if (!image.isNull() && size > 0)
-            image = image.smoothScale(size, size, QImage::ScaleMin);
-        pix.convertFromImage(image);
-    }
+    if (!pix.isNull() && pix.width() == size)
+        return pix;
+
+    // else our own, drawn at the size asked for
+    static QMap<QString, QPixmap> cache;
+    QString key = name + QChar('/') + QString::number(size);
+    QMap<QString, QPixmap>::ConstIterator it = cache.find(key);
+    if (it != cache.end())
+        return *it;
+    pix = drawIcon(icon ? name : QString::fromLatin1("weather-none-available"), size);
+    cache.insert(key, pix);
     return pix;
 }
