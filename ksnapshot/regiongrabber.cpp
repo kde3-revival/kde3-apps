@@ -115,8 +115,14 @@ void RegionGrabber::grabInput()
     return;
   }
 
+  // Qt's bookkeeping (its ungrabs have Qt's last event time, older than
+  // our grabs: the server would ignore them), then the one we may have got
   releaseMouse();
   releaseKeyboard();
+  if ( pointer )
+    XUngrabPointer( dpy, CurrentTime );
+  if ( keyboard )
+    XUngrabKeyboard( dpy, CurrentTime );
   // no key down: another program has the grabs, a menu that is open
   setWaiting( !keyHeld( dpy ) );
   if ( ++grabTries < maxGrabTries )
@@ -290,6 +296,9 @@ void RegionGrabber::finish( const QPixmap &result )
   done = true;
   releaseMouse();
   releaseKeyboard();
+  // (the grabs were taken with CurrentTime, see grabInput())
+  XUngrabPointer( qt_xdisplay(), CurrentTime );
+  XUngrabKeyboard( qt_xdisplay(), CurrentTime );
   hide();
   // gone from the screen before anyone grabs it again
   QApplication::syncX();
