@@ -136,6 +136,7 @@ public:
 protected:
     virtual void mousePressEvent( QMouseEvent* e );
     virtual void resizeEvent( QResizeEvent* e );
+    virtual void contextMenuAboutToShow( KPopupMenu* menu );
 
 private slots:
     void slotRestore();

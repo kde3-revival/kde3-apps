@@ -546,6 +546,23 @@ KWhatsAppTray::KWhatsAppTray( KWhatsApp* window )
     setUnread( 0 );
 }
 
+// KSystemTray puts a separator between the title and its own Minimize
+// and Quit, for the entries an application adds in between; KWhatsApp
+// adds none, so the separator would follow the title directly.  Minimize
+// (Restore) is left out too: a left click on the icon does it.
+void KWhatsAppTray::contextMenuAboutToShow( KPopupMenu* menu )
+{
+    KAction* restore = actionCollection()->action( "minimizeRestore" );
+    if ( restore && restore->isPlugged( menu ) )
+        restore->unplug( menu );
+    if ( menu->count() > 1 ) {
+        int id = menu->idAt( 1 );
+        QMenuItem* item = menu->findItem( id );
+        if ( item && item->isSeparator() )
+            menu->removeItem( id );
+    }
+}
+
 // In a system tray: there is one (the owner of the freedesktop.org
 // system tray selection: kicker's) and it took our window (reparented);
 // without one the window is its own (or the window manager's frame's).
