@@ -141,6 +141,8 @@ int main( int argc, char ** argv )
     KPDFDocument * doc = new KPDFDocument( &w );
     Observer obs;
     doc->addObserver( &obs );
+    // as Part does: closing sets up the viewport history
+    doc->closeDocument();
     KURL url;
     url.setPath( file );
     if ( !doc->openDocument( file, url, KMimeType::findByPath( file ) ) )
