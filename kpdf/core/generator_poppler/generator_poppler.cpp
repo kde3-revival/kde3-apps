@@ -542,8 +542,10 @@ bool PopplerGenerator::print( KPrinter& printer )
         cairo_scale( cr, sx, sy );
         if ( turn )
         {
-            cairo_translate( cr, h, 0 );
-            cairo_rotate( cr, M_PI / 2 );
+            // counter-clockwise, as PostScript landscape: a page shown
+            // turned by its /Rotate 90 prints the way it was made
+            cairo_translate( cr, 0, w );
+            cairo_rotate( cr, -M_PI / 2 );
         }
         if ( forceRasterize )
         {
