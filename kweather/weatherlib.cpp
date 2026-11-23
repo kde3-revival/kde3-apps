@@ -832,28 +832,38 @@ QStringList WeatherLib::dayHours(const QString &id, const QString &date)
 		return list;
 	long t = now();
 	QDate wanted = QDate::fromString(date, Qt::ISODate);
-	bool next24 = !wanted.isValid() || wanted <= d->local(t).date();
+	// today (or no date): the next 24 hours, by time, not by count
+	bool next24 = !wanted.isValid() || wanted == d->local(t).date();
 
-	// the hours of the model, then (hybrid) those of the other one after them
-	long last = d->hours.isEmpty() ? 0 : d->hours.last().time;
-	for (int part = 0; part < 2 && int(list.count()) < 24; ++part) {
-		const QValueList<Hour> &hours = part == 0 ? d->hours : d->laterHours;
-		const WeatherLib::Units &u = part == 0 ? d->hourUnits : d->laterUnits;
-		QValueList<Hour>::ConstIterator it = hours.begin();
-		for (; it != hours.end() && int(list.count()) < 24; ++it) {
+	// by time: the hours of the model first; with the hybrid model, those
+	// of the ECMWF fill the hours ICON-EU does not have (after its end,
+	// and where it had no value)
+	QMap<long, const Hour*> hours;
+	QMap<long, const WeatherLib::Units*> units;
+	for (int part = 1; part >= 0; --part) {
+		const QValueList<Hour> &source = part == 0 ? d->hours : d->laterHours;
+		const WeatherLib::Units *u = part == 0 ? &d->hourUnits : &d->laterUnits;
+		QValueList<Hour>::ConstIterator it = source.begin();
+		for (; it != source.end(); ++it) {
 			const Hour &h = *it;
-			if (part == 1 && h.time <= last)
+			if (next24 ? (h.time <= t || h.time > t + 24 * 3600)
+			           : d->local(h.time).date() != wanted)
 				continue;
-			QDateTime local = d->local(h.time);
-			if (next24 ? h.time <= t : local.date() != wanted)
-				continue;
-			list.append(local.toString(Qt::ISODate) + '\t'
-			            + WeatherIcons::iconName(h.code, h.day) + '\t'
-			            + cNumber(h.temp, 1) + '\t' + cNumber(h.precip, 2) + '\t'
-			            + cNumber(h.prob, 0) + '\t' + WeatherIcons::description(h.code) + '\t'
-			            + cNumber(h.windSpeed, 0) + '\t' + cNumber(h.windDirection, 0) + '\t'
-			            + temperatureUnit(u) + '\t' + precipitationUnit(u) + '\t' + windUnit(u));
+			hours[h.time] = &h;     // the model of the first part wins
+			units[h.time] = u;
 		}
+	}
+	QMap<long, const Hour*>::ConstIterator it = hours.begin();
+	for (; it != hours.end(); ++it) {
+		const Hour &h = **it;
+		const WeatherLib::Units &u = *units[it.key()];
+		list.append(d->local(h.time).toString(Qt::ISODate) + '\t'
+		            + WeatherIcons::iconName(h.code, h.day) + '\t'
+		            + cNumber(h.temp, 1) + '\t' + cNumber(h.precip, 2) + '\t'
+		            + cNumber(h.prob, 0) + '\t' + WeatherIcons::description(h.code) + '\t'
+		            + cNumber(h.windSpeed, 0) + '\t' + cNumber(h.windDirection, 0) + '\t'
+		            + temperatureUnit(u) + '\t' + precipitationUnit(u) + '\t' + windUnit(u)
+		            + '\t' + QString::number(h.time));
 	}
 	return list;
 }
