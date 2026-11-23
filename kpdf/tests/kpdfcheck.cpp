@@ -23,6 +23,7 @@
 #include <kapplication.h>
 #include <kcmdlineargs.h>
 #include <kmimetype.h>
+#include <kprinter.h>
 #include <kurl.h>
 
 #include <stdio.h>
@@ -121,7 +122,8 @@ int main( int argc, char ** argv )
             "       kpdfcheck outline FILE\n"
             "       kpdfcheck info FILE\n"
             "       kpdfcheck firstpage FILE WIDTH        (time to first page, threaded)\n"
-            "       kpdfcheck walk FILE WIDTH [PAGES]     (render pages in turn, memory)\n" );
+            "       kpdfcheck walk FILE WIDTH [PAGES]     (render pages in turn, memory)\n"
+            "       kpdfcheck print FILE OUT.ps FROM TO   (print to a PostScript file)\n" );
         return 2;
     }
     // KApplication takes the command line; keep ours
@@ -295,6 +297,18 @@ int main( int argc, char ** argv )
         }
         out << "pages " << n << " walk_ms " << t.elapsed() << " ms_per_page " << ( n ? t.elapsed() / n : 0 )
             << " rss_peak_kib " << peak << " rss_end_kib " << rssKiB() << "\n";
+    }
+    else if ( cmd == "print" && args.count() >= 3 )
+    {
+        KPrinter printer;
+        printer.setOutputToFile( true );
+        printer.setOutputFileName( args[0] );
+        printer.setPageSelection( KPrinter::ApplicationSide );
+        printer.setMinMax( 1, pages );
+        printer.setFromTo( args[1].toInt(), args[2].toInt() );
+        t.restart();
+        bool ok = doc->print( printer );
+        out << "print " << ( ok ? "ok" : "failed" ) << " print_ms " << t.elapsed() << "\n";
     }
     else
     {
