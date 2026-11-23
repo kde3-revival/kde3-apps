@@ -1222,6 +1222,12 @@ void PageView::contentsMouseReleaseEvent( QMouseEvent * e )
             menu.insertTitle( i18n( "Image (%1 by %2 pixels)" ).arg( selectionRect.width() ).arg( selectionRect.height() ) );
             menu.insertItem( SmallIcon("image"), i18n( "Copy to Clipboard" ), 3 );
             menu.insertItem( SmallIcon("filesave"), i18n( "Save to File..." ), 4 );
+            // the picture of the page is a copy of its contents as well
+            if ( !d->document->isAllowed( KPDFDocument::AllowCopy ) )
+            {
+                menu.setItemEnabled( 3, false );
+                menu.setItemEnabled( 4, false );
+            }
             int choice = menu.exec( e->globalPos() );
             // IMAGE operation choosen
             if ( choice > 2 )
