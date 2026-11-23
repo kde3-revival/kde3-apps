@@ -715,8 +715,9 @@ QValueList< ObjectRect * > PopplerGenerator::objectRects( int pageNumber )
             // as before: no frame around tiny images
             if ( fabs( m->area.x2 - m->area.x1 ) < w / 50 || fabs( m->area.y2 - m->area.y1 ) < h / 50 )
                 continue;
-            rects.push_back( new ObjectRect( m->area.x1 / w, ( h - m->area.y2 ) / h,
-                                             m->area.x2 / w, ( h - m->area.y1 ) / h,
+            // (unlike links, image areas have their origin at the top)
+            rects.push_back( new ObjectRect( m->area.x1 / w, m->area.y1 / h,
+                                             m->area.x2 / w, m->area.y2 / h,
                                              ObjectRect::Image, 0 ) );
         }
         poppler_page_free_image_mapping( images );
