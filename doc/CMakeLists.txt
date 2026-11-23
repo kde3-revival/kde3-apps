@@ -4,7 +4,7 @@
 # from kdeutils
 foreach(_app ark kcalc kcharselect kdf khexedit ktimer kwallet
         # from kdegraphics
-        kruler ksnapshot kview
+        kruler ksnapshot kview kpdf
         # from kdetoys
         kweather
         # new
