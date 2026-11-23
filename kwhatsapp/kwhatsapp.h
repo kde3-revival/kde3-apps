@@ -79,6 +79,7 @@ private:
     void savePosition();
 
     KParts::ReadOnlyPart* m_part;
+    QString m_site;   // the host of the page opened (web.whatsapp.com)
     KWhatsAppStatusLabel* m_statusLabel;
     KWhatsAppTray* m_tray;
     KToggleAction* m_showMenubar;

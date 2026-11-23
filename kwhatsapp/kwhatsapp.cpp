@@ -99,6 +99,7 @@ KWhatsApp::KWhatsApp( const KURL& url )
     QString userAgent = general.readEntry( "UserAgent" );
     if ( userAgent.isEmpty() )
         userAgent = defaultUserAgent();
+    m_site = url.host().lower();
     QStringList args;
     args << QString::fromLatin1( "mode=app" ) << QString::fromLatin1( "appName=kwhatsapp" )
          << QString::fromLatin1( "sites=" ) + url.host();
@@ -210,7 +211,11 @@ void KWhatsApp::slotPermission( const QString& kind, const QString& origin, bool
     // Notifications: always for the page (the settings decide what is
     // shown).  Microphone, camera, screen sharing (voice messages,
     // calls): WebRTC in WPE WebKit is not tested here yet: no.
-    if ( kind == "notifications" ) {
+    // Notifications: for WhatsApp's own page only (the part shows no
+    // other site, this is the second check).
+    KURL from( origin );
+    if ( kind == "notifications" && ( from.protocol() == "https" || from.protocol() == "http" )
+         && from.host().lower() == m_site ) {
         allow = true;
         return;
     }
