@@ -971,6 +971,11 @@ void PageView::contentsMouseMoveEvent( QMouseEvent * e )
 
 void PageView::contentsMousePressEvent( QMouseEvent * e )
 {
+    // a click on the pages gives them the keyboard (Konqueror keeps it in
+    // its location bar otherwise): Ctrl+C, Ctrl+A, the arrows, find as you type
+    if ( !hasFocus() )
+        setFocus();
+
     // don't perform any mouse action when no document is shown
     if ( d->items.isEmpty() )
         return;
