@@ -1,0 +1,15 @@
+# kwhatsapp's test image: Fedora 44, WPE WebKit and the kde3 packages of
+# kde3-packaging (their run time dependencies; /opt/kde3 and /opt/kde3-qt
+# of the test machine are mounted over them), build tools, an X server
+# and the tools the test drives it with.
+#   mkdir ctx ctx/rpms; cp wpewebkit-*.rpm kde3-qt-*.rpm kde3-kdelibs-*.rpm kde3-kdebase-*.rpm ctx/rpms/
+#   podman build -t localhost/kwhatsapp-test -f Containerfile ctx
+FROM registry.fedoraproject.org/fedora:44
+COPY rpms/ /tmp/rpms/
+RUN dnf -y --setopt=install_weak_deps=False install /tmp/rpms/*.rpm \
+      cmake ninja-build gcc-c++ pkgconfig glib2-devel libsoup3-devel gumbo-parser gumbo-parser-devel \
+      libdrm-devel libX11-devel libxcb-devel libXext-devel libXfixes-devel libXpresent-devel libXrandr-devel \
+      xorg-x11-server-Xvfb xdotool xprop xwininfo ImageMagick python3 procps-ng ca-certificates \
+      dejavu-sans-fonts dejavu-serif-fonts dejavu-sans-mono-fonts google-noto-sans-fonts \
+      gstreamer1-plugins-base gstreamer1-plugins-good \
+    && dnf clean all && rm -rf /tmp/rpms

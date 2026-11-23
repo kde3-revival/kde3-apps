@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<!-- kwhatsapp's test page: what kwhatsapp needs of WhatsApp Web, without
+     WhatsApp (served by ../server.py as http://localhost:8080/app.html, a
+     secure context).  Every result goes to the server's log (/log?TEXT). -->
+<html><head><meta charset="utf-8"><title>WhatsApp</title>
+<style>
+  body { margin: 0; font: 16px sans-serif; background: #eef; }
+  .b { position: absolute; width: 220px; height: 70px; box-sizing: border-box; border: 2px solid #446;
+       background: #fff; display: flex; align-items: center; justify-content: center; color: #000;
+       text-decoration: none; font-size: 18px; }
+  #drop { position: absolute; left: 20px; top: 330px; width: 940px; height: 280px; border: 4px dashed #484;
+          background: #efe; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  #drop.over { background: #cfc; }
+  #out { position: absolute; left: 20px; top: 630px; margin: 0; font-size: 13px; }
+</style></head>
+<body>
+<button class="b" id="perm" style="left:20px;top:20px">permission</button>
+<button class="b" id="notify" style="left:260px;top:20px">notify</button>
+<button class="b" id="unread" style="left:500px;top:20px">unread 3</button>
+<button class="b" id="read" style="left:740px;top:20px">unread 0</button>
+<a class="b" id="blank" href="https://example.org/blank-target" target="_blank" style="left:20px;top:120px">target=_blank</a>
+<a class="b" id="other" href="http://127.0.0.1:8081/other.html" style="left:260px;top:120px">other site</a>
+<a class="b" id="same" href="/page2.html" style="left:500px;top:120px">same site</a>
+<a class="b" id="mail" href="mailto:someone@example.org?subject=test" style="left:740px;top:120px">mailto</a>
+<a class="b" id="dl" href="/download/attachment" style="left:20px;top:220px">attachment</a>
+<button class="b" id="blob" style="left:260px;top:220px">blob download</button>
+<input class="b" id="file" type="file" style="left:500px;top:220px">
+<button class="b" id="mic" style="left:740px;top:220px">microphone</button>
+<div id="drop">drop files here</div>
+<pre id="out"></pre>
+<script>
+function log(text) {
+  document.getElementById('out').textContent += text + '\n';
+  fetch('/log?' + encodeURIComponent(text), { cache: 'no-store' });
+}
+function idb(done) {
+  try {
+    var r = indexedDB.open('kwtest', 1);
+    r.onupgradeneeded = function() { r.result.createObjectStore('s'); };
+    r.onsuccess = function() {
+      var tx = r.result.transaction('s', 'readwrite'), s = tx.objectStore('s'), g = s.get('n');
+      g.onsuccess = function() { var n = (g.result || 0) + 1; s.put(n, 'n'); done(n); };
+    };
+    r.onerror = function() { done('error'); };
+  } catch (e) { done('exception ' + e); }
+}
+window.addEventListener('load', function() {
+  var visits = (+localStorage.getItem('visits') || 0) + 1;
+  localStorage.setItem('visits', visits);
+  var cookie = document.cookie;
+  document.cookie = 'kwtest=' + visits + '; max-age=31536000; path=/';
+  idb(function(n) {
+    log('load visit=' + visits + ' cookie=[' + cookie + '] idb=' + n + ' permission=' +
+        (window.Notification ? Notification.permission : 'no-api') + ' ua=' + navigator.userAgent);
+    if (navigator.permissions)
+      navigator.permissions.query({ name: 'notifications' }).then(function(s) { log('query ' + s.state); },
+                                                                 function(e) { log('query error ' + e); });
+  });
+});
+document.getElementById('perm').onclick = function() {
+  Notification.requestPermission().then(function(p) { log('permission ' + p); });
+};
+document.getElementById('notify').onclick = function() {
+  var n = new Notification('Alice <Test>', { body: 'Hello <b>bold</b> & co\nsecond line', tag: 't1' });
+  n.onshow = function() { log('notification shown'); };
+  n.onclick = function() { log('notification click'); };
+  n.onerror = function() { log('notification error'); };
+};
+document.getElementById('unread').onclick = function() { document.title = '(3) WhatsApp'; log('title ' + document.title); };
+document.getElementById('read').onclick = function() { document.title = 'WhatsApp'; log('title ' + document.title); };
+document.getElementById('blob').onclick = function() {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['blob content from the page\n'], { type: 'text/plain' }));
+  a.download = 'blob.txt';
+  document.body.appendChild(a);
+  a.click();
+  log('blob clicked');
+};
+document.getElementById('file').onchange = function(e) {
+  var f = e.target.files[0];
+  f.text().then(function(t) { log('upload ' + f.name + ' ' + f.size + ' ' + JSON.stringify(t.slice(0, 30))); });
+};
+document.getElementById('mic').onclick = function() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { log('mic no-api'); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function() { log('mic granted'); },
+                                                            function(e) { log('mic ' + e.name); });
+};
+var drop = document.getElementById('drop');
+drop.addEventListener('dragenter', function(e) { e.preventDefault(); drop.className = 'over'; log('dragenter'); });
+drop.addEventListener('dragover', function(e) { e.preventDefault(); });
+drop.addEventListener('drop', function(e) {
+  e.preventDefault();
+  drop.className = '';
+  var files = e.dataTransfer.files;
+  log('drop types=' + Array.prototype.join.call(e.dataTransfer.types, ',') + ' files=' + files.length +
+      ' trusted=' + e.isTrusted);
+  Array.prototype.forEach.call(files, function(f) {
+    f.arrayBuffer().then(function(b) {
+      var bytes = new Uint8Array(b), sum = 0;
+      for (var i = 0; i < bytes.length; i++) sum = (sum * 31 + bytes[i]) >>> 0;
+      log('dropped ' + f.name + ' ' + f.size + ' ' + f.type + ' sum=' + sum);
+    });
+  });
+});
+</script>
+</body></html>
