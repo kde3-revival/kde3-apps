@@ -56,6 +56,36 @@ filedialog() {
   sleep 1
   return 0
 }
+# Kopete's balloon (kwhatsappballoon.cpp): its caption is "New message"
+balloon() { xdotool search --onlyvisible --name '^New message$' 2> /dev/null | head -1; }
+wait_balloon() {   # wait_balloon SECONDS: B and its geometry BX BY BW BH
+  local i=0
+  B=
+  while [ $i -lt $(( $1 * 4 )) ]; do B=$(balloon); [ -n "$B" ] && break; sleep 0.25; i=$((i + 1)); done
+  [ -n "$B" ] || return 1
+  sleep 0.7
+  eval "$(xdotool getwindowgeometry --shell $B 2> /dev/null)"
+  BX=$X; BY=$Y; BW=$WIDTH; BH=$HEIGHT
+}
+wait_no_balloon() {
+  local i=0
+  while [ $i -lt $(( $1 * 4 )) ]; do [ -z "$(balloon)" ] && return 0; sleep 0.25; i=$((i + 1)); done
+  return 1
+}
+balloon_shot() { import -window root -crop ${BW}x${BH}+${BX}+${BY} "$O/$1.png" 2> /dev/null; }
+# the balloon's buttons: View left of its centre, Ignore right of it
+balloon_view() { xdotool mousemove $(( BX + BW / 2 - 40 )) $(( BY + BH - 36 )) sleep 0.2 click 1; }
+balloon_ignore() { xdotool mousemove $(( BX + BW / 2 + 40 )) $(( BY + BH - 36 )) sleep 0.2 click 1; }
+pixels() {   # pixels FILE COLOUR FUZZ: how many pixels of about that colour
+  convert "$1" -alpha off -fuzz "$3" -fill black +opaque "$2" -fill white -opaque "$2" \
+          -format '%[fx:round(mean*w*h)]' info: 2> /dev/null || echo 0
+}
+away() { xdotool windowminimize "$W"; sleep 0.5; }   # the window not in front
+front() {   # the window in front, where the clicks expect it
+  xdotool windowactivate --sync "$W" 2> /dev/null; sleep 1
+  xwininfo -id "$W" | grep -E 'Width|Height' | tr -d ' ' | tr '\n' ' ' >> $O/geometry.txt; echo >> $O/geometry.txt
+  xdotool windowmove "$W" 0 0 windowsize "$W" 1240 940; sleep 0.5
+}
 pids_of_app() {   # kwhatsapp and its WebKit processes
   local p=$(pgrep -x kwhatsapp | head -1)
   [ -n "$p" ] || return
@@ -130,6 +160,87 @@ sleep 5
 python3 -I $T/server.py $O/page.log 8080 8081 2> $O/server.log &
 sleep 1
 
+# Kopete's balloon at the tray icon (TX TY: the icon's centre, TRAYTOP)
+balloon_tests() {
+  # a data: picture; the tail at the icon; a click on the balloon: the chat
+  front; click 130 675
+  H0=$(xwininfo -id "$W" | awk '/Height:/ {print $2}')
+  away
+  if ! wait_balloon 10; then fail balloon-shown "no balloon"; shot 12-no-balloon; return; fi
+  ok balloon-shown
+  shot 12-balloon; balloon_shot 12-balloon-crop
+  BW1=$BW
+  n=$(pixels $O/12-balloon-crop.png '#ff0000' 8%)
+  [ "${n:-0}" -gt 300 ] && ok balloon-picture-data-url || fail balloon-picture-data-url "$n red pixels"
+  tipx=$(( BX + BW - 1 )); tipy=$(( BY + BH - 1 ))
+  if [ $(( tipx - TX )) -ge -2 ] && [ $(( tipx - TX )) -le 2 ] && [ $(( tipy - TRAYTOP )) -ge -2 ] && [ $(( tipy - TRAYTOP )) -le 2 ]; then
+    ok balloon-at-tray-icon
+  else fail balloon-at-tray-icon "tip $tipx,$tipy icon centre $TX top $TRAYTOP"; fi
+  xdotool mousemove $(( BX + 46 )) $(( BY + 46 )) sleep 0.2 click 1
+  check balloon-click-opens-chat $O/page.log '^notification click t2' 10
+  sleep 1; shot 13-after-view
+  # shown again as it was (its size: not un-maximized by showNormal())
+  h=$(xwininfo -id "$W" | awk '/Height:/ {print $2}')
+  [ "$h" = "$H0" ] && ok balloon-view-keeps-size || fail balloon-view-keeps-size "height $h, was $H0"
+  cur=$(xdotool get_desktop); wd=$(xdotool get_desktop_for_window "$W" 2> /dev/null)
+  xwininfo -id "$W" | grep -q IsViewable && [ "$cur" = "$wd" ] && ok balloon-click-shows-window \
+    || fail balloon-click-shows-window "map=$(xwininfo -id $W | grep 'Map State') desktop=$cur window=$wd"
+  wait_no_balloon 3 && ok balloon-gone-after-view || fail balloon-gone-after-view "still shown"
+
+  # a picture of the page's own origin; Ignore: closed, no click
+  front; click 370 675; away
+  if wait_balloon 10; then
+    balloon_shot 13-balloon-own-origin-crop
+    n=$(pixels $O/13-balloon-own-origin-crop.png '#ff0000' 8%)
+    [ "${n:-0}" -gt 300 ] && ok balloon-picture-own-origin || fail balloon-picture-own-origin "$n red pixels"
+    balloon_ignore
+    wait_no_balloon 3 && ok balloon-ignore-closes || fail balloon-ignore-closes "still shown"
+    sleep 2
+    grep -q '^notification click t3' $O/page.log && fail balloon-ignore-no-click "clicked" || ok balloon-ignore-no-click
+    xwininfo -id "$W" | grep -q IsViewable && fail balloon-ignore-window-away "shown" || ok balloon-ignore-window-away
+  else fail balloon-picture-own-origin "no balloon"; fi
+
+  # a picture of another site: not shown, kwhatsapp's icon instead
+  front; click 610 675; away
+  if wait_balloon 10; then
+    balloon_shot 14-balloon-foreign-icon
+    n=$(pixels $O/14-balloon-foreign-icon.png '#ff0000' 8%)
+    g=$(pixels $O/14-balloon-foreign-icon.png '#3cc24e' 15%)
+    [ "${n:-0}" -lt 20 ] && [ "${g:-0}" -gt 200 ] && ok balloon-foreign-picture-not-shown \
+      || fail balloon-foreign-picture-not-shown "$n red, $g green pixels"
+    # (WebKit's web process loads a notification's icon itself, as any
+    # browser does; nothing else may: kwhatsapp, KIO)
+    if grep 'avatar fetched by' $O/server.log | grep -qv 'AppleWebKit'; then
+      fail picture-fetched-by-webkit-only "$(grep 'avatar fetched' $O/server.log)"
+    else ok picture-fetched-by-webkit-only; fi
+    balloon_ignore; wait_no_balloon 3
+  else fail balloon-foreign-picture-not-shown "no balloon"; fi
+
+  # two at once: one balloon after the other; View: the window, that chat
+  front; click 850 675; away
+  if wait_balloon 10; then
+    balloon_shot 15-balloon-queue-1
+    balloon_ignore
+    sleep 1
+    if wait_balloon 5; then
+      ok balloon-queue-next
+      balloon_shot 16-balloon-queue-2
+      balloon_view
+      check balloon-view-opens-chat $O/page.log '^notification click q2' 10
+      grep -q '^notification click q1' $O/page.log && fail balloon-queue-ignored-first "q1 clicked" || ok balloon-queue-ignored-first
+      sleep 1
+      xwininfo -id "$W" | grep -q IsViewable && ok balloon-view-shows-window || fail balloon-view-shows-window "not shown"
+    else fail balloon-queue-next "no second balloon"; fi
+  else fail balloon-queue-next "no balloon"; fi
+
+  # the page closes its notification: the balloon goes
+  front; click 1110 675; away
+  if wait_balloon 10; then
+    check page-closed-notification $O/page.log '^page closed t5' 10
+    wait_no_balloon 3 && ok balloon-closed-by-page || fail balloon-closed-by-page "still shown"
+  else fail balloon-closed-by-page "no balloon"; fi
+}
+
 phase_local() {
   RUN=1
   start_app --url http://localhost:8080/app.html || return
@@ -148,6 +259,8 @@ phase_local() {
   check notification-shown $O/page.log '^notification shown' 10
   check knotify-content $O/knotify.log 'Alice &lt;Test&gt;.*Hello &lt;b&gt;bold&lt;/b&gt; &amp; co<br>second line' 10
   sleep 0.5; shot 02-notification
+  # the window is in front: KNotify's log, no balloon
+  [ -z "$(balloon)" ] && ok balloon-not-when-in-front || fail balloon-not-when-in-front "a balloon"
 
   # unread chats: the title, the tray icon
   click 610 55
@@ -258,6 +371,9 @@ print(s)' "$1"; }
     click 850 55
     sleep 1
     import -window root -crop $(( $3 + 16 ))x$(( $4 + 16 ))+$(( $1 - 8 ))+$(( $2 - 8 )) $O/11-tray-read.png
+    TRAYTOP=$2
+    balloon_tests
+    front
   fi
 
   # closing the window keeps the application (in the tray)
@@ -287,6 +403,17 @@ EOC
   click 370 55
   check notification-no-content $O/knotify.log ': New message$' 10
   grep -q Alice $O/knotify.log && fail notification-no-content-hidden "sender shown" || ok notification-no-content-hidden
+  # the balloon: "New message" only, no picture (kwhatsapp's icon)
+  click 130 675; away
+  if wait_balloon 10; then
+    shot 17-balloon-no-content; balloon_shot 17-balloon-no-content-crop
+    n=$(pixels $O/17-balloon-no-content-crop.png '#ff0000' 8%)
+    [ "${n:-0}" -lt 20 ] && ok balloon-no-content-no-picture || fail balloon-no-content-no-picture "$n red pixels"
+    [ -n "${BW1:-}" ] && [ "$BW" -lt $(( BW1 - 40 )) ] && ok balloon-no-content-no-text \
+      || fail balloon-no-content-no-text "width $BW (with the content ${BW1:-?})"
+    balloon_ignore; wait_no_balloon 3
+  else fail balloon-no-content-no-picture "no balloon"; fi
+  front
 
   # a frame of another site sends the top to about:blank: not trusted,
   # the application's page comes back
@@ -324,7 +451,20 @@ EOC
     > $KDEHOME/share/apps/kwhatsapp/webkit/kwpepart-permissions
   RUN=3
   : > $O/page.log
+  sed -i 's/^MenuBar=Disabled/MenuBar=Enabled/' $KDEHOME/share/config/kwhatsapprc
   start_app --url http://localhost:8080/app.html || return
+  # the menus (File, Edit, View, Settings, Help; Quit once), the tray's
+  xdotool windowactivate --sync "$W"; sleep 1
+  shot 30-menubar
+  for m in f e v s; do
+    xdotool key --clearmodifiers alt+$m; sleep 1; shot 3$(( $(echo fevs | sed "s/$m.*//" | wc -c) ))-menu-$m
+    xdotool key Escape; sleep 0.5
+  done
+  if [ -n "${TX:-}" ]; then
+    xdotool mousemove $TX $TY sleep 0.2 click 3; sleep 1; shot 35-tray-menu
+    xdotool key Escape; sleep 0.5
+  fi
+  xdotool windowactivate --sync "$W"; sleep 0.5
   # (WebKit reports an origin denied at start as "default")
   check permissions-not-granted $O/page.log '^load visit=.*permission=(denied|default)' 20
   check permissions-query-not-granted $O/page.log '^query (denied|prompt)' 10

@@ -39,6 +39,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if url.path == '/avatar.svg':
+            # who fetched a notification's picture (WebKit's web process
+            # or something else)
+            sys.stderr.write('%s avatar fetched by [%s]\n' % (self.server.server_address[1],
+                                                               self.headers.get('User-Agent', '')))
         super().do_GET()
 
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
