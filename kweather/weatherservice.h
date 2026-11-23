@@ -126,6 +126,15 @@ class WeatherService : public QObject, public DCOPObject
 		 */
 		QStringList hourlyValues(const QString &stationID, int hours);
 		QStringList dailyValues(const QString &stationID);
+		/**
+		 * The hours of the day @p date (ISO 8601, at the location), or the
+		 * next 24 hours for today or an empty date: "<time>\t<icon>\t
+		 * <temperature>\t<precipitation>\t<probability>\t<description>\t
+		 * <wind speed>\t<wind direction (from), degrees>\t<temperature
+		 * unit>\t<precipitation unit>\t<wind unit>", numbers in the C
+		 * locale, empty if unknown.
+		 */
+		QStringList dayHours(const QString &stationID, const QString &date);
 		/** The local time (ISO 8601) of the current weather. */
 		QString currentTime(const QString &stationID);
 		/** The precipitation of the next hour if there is any, else empty. */

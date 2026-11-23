@@ -81,6 +81,7 @@ class WeatherLib : public QObject
 		QStringList hourlyValues(const QString &id, int hours);
 		QStringList dailyValues(const QString &id);
 		QString currentTime(const QString &id);
+		QStringList dayHours(const QString &id, const QString &date);
 		QString rainNextHour(const QString &id);
 		QString error(const QString &id);
 		bool hasData(const QString &id);
@@ -107,13 +108,14 @@ class WeatherLib : public QObject
 			bool current;
 			bool hourly;
 			bool daily;
+			bool later;	// hours after those of the first model
 			Units units;
 		};
 
 		Data* findData(const QString &id);
 		void getData(Data *d, bool force = false);
 		void startJob(Data *d, const QString &model, bool current,
-		              bool hourly, bool daily);
+		              bool hourly, bool daily, bool later = false);
 
 		QDict<Data> m_data;
 		QString m_server;
