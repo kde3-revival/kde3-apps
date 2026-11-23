@@ -55,6 +55,14 @@ signals: // Signals
 private:
     void initDock();
     void updateFont();
+    void fitFont(int lines, int height, int width, const QString &text);
+    int textLines() const;
+    int textWidth() const;
+    void setIconSize(int size);
+    static int iconSizeFor(int thickness);
+
+    // around the icon, for the highlight of WeatherButton
+    enum { buttonMargin = 3 };
 
     int m_mode;
     QString m_locationCode;
@@ -65,6 +73,7 @@ private:
     QLabel *m_lblWind;
     QLabel *m_lblPres;
     Orientation m_orientation;
+    int m_iconSize;
 
     WeatherService_stub *m_weatherService;
 };

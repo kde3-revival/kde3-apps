@@ -33,7 +33,8 @@
 #include <klocale.h>
 
 dockwidget::dockwidget(const QString &location, QWidget *parent,
-        const char *name) : QWidget(parent,name), m_locationCode( location ), m_orientation( Horizontal )
+        const char *name) : QWidget(parent,name), m_locationCode( location ), m_orientation( Horizontal ),
+        m_iconSize( 22 )
 {
     m_font = KGlobalSettings::generalFont();
     setBackgroundOrigin( AncestorOrigin );
@@ -140,7 +141,7 @@ void dockwidget::showWeather()
     m_lblWind->setText(wind);
     m_lblPres->setText(pressure);
     m_iconName = iconName;
-    m_button->setPixmap( WeatherIcons::load( iconName, 128 ) );
+    m_button->setPixmap( WeatherIcons::load( iconName, m_iconSize ) );
 }
 
 void dockwidget::initDock()
@@ -173,11 +174,65 @@ void dockwidget::initDock()
     layout->addWidget(m_lblWind);
     layout->addWidget(m_lblPres);
 
-    mainLayout->addSpacing(8);
-
     updateFont();
 
     QTimer::singleShot( 0, this, SLOT( showWeather() ) );
+}
+
+/** The icon size for a panel @p thickness pixels thick: the largest
+    standard size up to 70 % of it, so that the icon is drawn at its own
+    size (crisp) with a margin around it. */
+int dockwidget::iconSizeFor(int thickness)
+{
+    static const int sizes[] = { 128, 96, 64, 48, 32, 22, 16, 0 };
+    int want = thickness * 7 / 10;
+    for (int i = 0; sizes[i]; ++i)
+        if (sizes[i] <= want)
+            return sizes[i];
+    return 16;
+}
+
+/** The panel font, smaller when @p lines lines of it do not fit into
+    @p height pixels or when @p text is wider than @p width (0: any). */
+void dockwidget::fitFont(int lines, int height, int width, const QString &text)
+{
+    m_font = KGlobalSettings::generalFont();
+    QFontMetrics general(m_font);
+    // a line is higher than the pixel size: shrink until it all fits
+    for (int px = general.height(); ; --px) {
+        if (px < general.height())
+            m_font.setPixelSize(px);
+        QFontMetrics fm(m_font);
+        bool fits = (height <= 0 || lines * fm.height() <= height)
+                    && (width <= 0 || text.isEmpty() || fm.width(text) <= width);
+        if (fits || px <= 8)
+            break;
+    }
+    updateFont();
+}
+
+int dockwidget::textLines() const
+{
+    return m_mode == ShowAll ? 3 : m_mode == ShowTempOnly ? 1 : 0;
+}
+
+int dockwidget::textWidth() const
+{
+    QFontMetrics fm(m_font);
+    int w = 0;
+    if (m_mode == ShowTempOnly || m_mode == ShowAll)
+        w = fm.width(m_lblTemp->text());
+    if (m_mode == ShowAll)
+        w = QMAX(w, QMAX(fm.width(m_lblWind->text()), fm.width(m_lblPres->text())));
+    return w;
+}
+
+void dockwidget::setIconSize(int size)
+{
+    if (size == m_iconSize)
+        return;
+    m_iconSize = size;
+    m_button->setPixmap(WeatherIcons::load(m_iconName, m_iconSize));
 }
 
 /** resize the view **/
@@ -185,260 +240,62 @@ void dockwidget::resizeView( const QSize &size )
 {
     kdDebug(12004) << "Changing to size " << size << endl;
     resize(size);
+    QBoxLayout *box = static_cast<QBoxLayout*>(layout());
+    int align = 0;
 
-    if ( m_orientation == Horizontal ) // Kicker in horizontal mode
+    if ( m_orientation == Horizontal )
     {
+        // the icon, then the text beside it
         int h = size.height();
-
-        if ( m_mode == ShowAll )
-        {
-            if ( h <= 128 )  // left to right layout
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::LeftToRight);
-                m_lblTemp->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-                m_lblWind->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-                m_lblPres->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-            }
-            else  // top to bottom
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::TopToBottom);
-                QFontMetrics fm(m_font);
-                h = 128 - (3 * fm.height());  // 3 lines of text below the button
-                m_lblTemp->setAlignment(Qt::AlignCenter);
-                m_lblWind->setAlignment(Qt::AlignCenter);
-                m_lblPres->setAlignment(Qt::AlignCenter);
-            }
-            m_button->setFixedSize(h, h);
-        }
-        else if ( m_mode == ShowTempOnly )
-        {
-            if ( h <= 64 )  // left to right: the icon beside the temperature
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::LeftToRight);
-                m_lblTemp->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-            }
-            else  // top to bottom
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::TopToBottom);
-                QFontMetrics fm(m_font);
-                h = QMIN(128, h) - fm.height();
-                m_lblTemp->setAlignment(Qt::AlignCenter);
-            }
-            m_button->setFixedSize(h, h);
-        }
-        else
-        {
-            h = QMIN(h, 128);
-            m_button->setFixedSize(h, h);
-        }
+        setIconSize(iconSizeFor(h));
+        box->setDirection(QBoxLayout::LeftToRight);
+        box->setSpacing(textLines() ? 3 : 0);
+        m_button->setFixedSize(m_iconSize + 2 * buttonMargin, h);
+        align = Qt::AlignAuto | Qt::AlignVCenter;
     }
-    else // Kicker in vertical mode
+    else
     {
+        // the icon, then the text below it
         int w = size.width();
-        int h = size.height();
-
-        if ( m_mode == ShowAll )
-        {
-            if ( w <= 128 )  // top to bottom
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::TopToBottom);
-                m_lblTemp->setAlignment(Qt::AlignCenter);
-                m_lblWind->setAlignment(Qt::AlignCenter);
-                m_lblPres->setAlignment(Qt::AlignCenter);
-
-                QFontMetrics fm(m_font);
-                h = h - (3 * fm.height());  // 3 lines of text below the button
-                h = QMIN(w, h);
-            }
-            else  // left to right layout
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::LeftToRight);
-                m_lblTemp->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-                m_lblWind->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-                m_lblPres->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-            }
-            m_button->setFixedSize(h, h);
-        }
-        else if ( m_mode == ShowTempOnly )
-        {
-            if ( w <= 128 )  // top to bottom
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::TopToBottom);
-                m_lblTemp->setAlignment(Qt::AlignCenter);
-
-                h = w;
-            }
-            else  // left to right layout
-            {
-                static_cast<QBoxLayout*>(layout())->setDirection(QBoxLayout::LeftToRight);
-                m_lblTemp->setAlignment(Qt::AlignAuto | Qt::AlignVCenter);
-
-                h = static_cast<int>(w * 0.33);
-            }
-            m_button->setFixedSize(h, h);
-        }
-        else
-        {
-            w = QMIN(w, 128);
-            m_button->setFixedSize(w, w);
-        }
+        setIconSize(iconSizeFor(w));
+        box->setDirection(QBoxLayout::TopToBottom);
+        box->setSpacing(0);
+        m_button->setFixedSize(w, m_iconSize + 2 * buttonMargin);
+        align = Qt::AlignCenter;
     }
+    m_lblTemp->setAlignment(align);
+    m_lblWind->setAlignment(align);
+    m_lblPres->setAlignment(align);
 }
 
 int dockwidget::widthForHeight(int h)
 {
-    int w;
-    QFontInfo fi(KGlobalSettings::generalFont());
-
-    if ( m_mode == ShowAll )
-    {
-        if ( h <= 128 )  // left to right layout
-        {
-            int pixelSize = h/3 - 3;
-            pixelSize = QMIN(pixelSize, fi.pixelSize());  // don't make it too large
-            m_font.setPixelSize(pixelSize);
-            QFontMetrics fm(m_font);
-            w = h + QMAX(fm.width(m_lblWind->text()), fm.width(m_lblPres->text())) + 1;
-        }
-        else  // top to bottom
-        {
-            if ( fi.pixelSize() * 3 <= (h/2) )  // half icon, half text
-            {
-                m_font = KGlobalSettings::generalFont();
-            }
-            else
-            {
-                m_font.setPixelSize(h/2/3);
-            }
-            QFontMetrics fm(m_font);
-            // size of icon
-            h = 128 - (3 * fm.height());  // 3 lines of text below the button
-            w = QMAX(fm.width(m_lblWind->text()), fm.width(m_lblPres->text())) + 1;
-            w = QMAX(h, w);  // at least width of square icon
-        }
-    }
-    else if ( m_mode == ShowTempOnly )
-    {
-        if ( h <= 64 )  // left to right: the icon beside the temperature
-        {
-            int pixelSize = h - 3;
-            pixelSize = QMIN(pixelSize, fi.pixelSize());  // don't make it too large
-            m_font.setPixelSize(pixelSize);
-            QFontMetrics fm(m_font);
-            w = h + fm.width(m_lblTemp->text()) + 1;
-        }
-        else  // top to bottom
-        {
-            if ( fi.pixelSize() <= (h/2) )  // half icon, half text
-            {
-                m_font = KGlobalSettings::generalFont();
-            }
-            else
-            {
-                m_font.setPixelSize(h/2);
-            }
-            QFontMetrics fm(m_font);
-            // size of icon
-            h = QMIN(128, h) - fm.height();
-            w = fm.width(m_lblTemp->text()) + 1;
-            w = QMAX(h, w);  // at least width of square icon
-        }
-    }
-    else
-    {
-        w = QMIN(128, h);  // don't make it too large
-    }
-
-    updateFont();
-    return w + 4;
+    int icon = iconSizeFor(h) + 2 * buttonMargin;
+    if (!textLines())
+        return icon;
+    fitFont(textLines(), h, 0, QString::null);
+    return icon + 3 + textWidth() + 2;
 }
 
 int dockwidget::heightForWidth( int w )
 {
-    int h;
-
-    if ( m_mode == ShowAll )
-    {
-        QFontMetrics fmg(KGlobalSettings::generalFont());
-        int maxWidth = fmg.width("888 km/h NNWW");  // a good approximation
-
-        if ( w <= 128 )  // top to bottom
-        {
-            if ( maxWidth <= w )  // enough space to use global font
-            {
-                m_font = KGlobalSettings::generalFont();
-            }
-            else  // we have to reduce the fontsize
-            {
-                m_font.setPixelSize(static_cast<int>(fmg.height() * double(w) / maxWidth));
-            }
-
-            QFontMetrics fm(m_font);
-            h = w + (3 * fm.height());  // 3 lines of text below the button
-        }
-        else
-        {
-            if ( w >= (maxWidth * 1.5) )  // half of text width shall be icon
-            {
-                m_font = KGlobalSettings::generalFont();
-            }
-            else
-            {
-                m_font.setPixelSize(static_cast<int>(fmg.height() * (w*0.66) / maxWidth));
-            }
-
-            QFontMetrics fm(m_font);
-            h = 3 * fm.height();  // 3 lines of text
-
-        }
+    int icon = iconSizeFor(w) + 2 * buttonMargin;
+    if (!textLines())
+        return icon;
+    QString widest = m_lblTemp->text();
+    if (m_mode == ShowAll) {
+        QFontMetrics fm(KGlobalSettings::generalFont());
+        if (fm.width(m_lblWind->text()) > fm.width(widest))
+            widest = m_lblWind->text();
+        if (fm.width(m_lblPres->text()) > fm.width(widest))
+            widest = m_lblPres->text();
     }
-    else if ( m_mode == ShowTempOnly )
-    {
-        QFontMetrics fmg(KGlobalSettings::generalFont());
-        int maxWidth = fmg.width("888.88 CC");  // a good approximation
-
-        if ( w <= 128 )  // top to bottom
-        {
-            if ( maxWidth <= w )  // enough space to use global font
-            {
-                m_font = KGlobalSettings::generalFont();
-            }
-            else  // we have to reduce the fontsize
-            {
-                m_font.setPixelSize(static_cast<int>(fmg.height() * double(w) / maxWidth));
-            }
-
-            QFontMetrics fm(m_font);
-            h = w + fm.height();  // text below the button
-        }
-        else
-        {
-            if ( w >= (maxWidth * 1.5) )  // half of text width shall be icon
-            {
-                m_font = KGlobalSettings::generalFont();
-            }
-            else
-            {
-                m_font.setPixelSize(static_cast<int>(fmg.height() * (w*0.66) / maxWidth));
-            }
-
-            QFontMetrics fm(m_font);
-            h = QMAX(fm.height(), static_cast<int>(w * 0.33));
-        }
-    }
-    else
-    {
-        h = QMIN(128, w);  // don't make it too large
-    }
-
-    updateFont();
-    return h;
+    fitFont(textLines(), 0, w - 2, widest);
+    return icon + textLines() * QFontMetrics(m_font).height() + 2;
 }
-
 
 void dockwidget::updateFont()
 {
-    //kdDebug(12004) << "Update font: " << m_font.pixelSize() << endl;
     m_lblTemp->setFont(m_font);
     m_lblWind->setFont(m_font);
     m_lblPres->setFont(m_font);
