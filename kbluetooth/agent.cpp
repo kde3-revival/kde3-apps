@@ -98,7 +98,15 @@ struct BluezAgentPrivate
         s_agent->request(invocation, QString::fromLatin1(method), parameters);
     }
 
-    static void registered(GObject *source, GAsyncResult *result, gpointer)
+    // the reply belongs to the bluetoothd and connection of now: not to one
+    // that went away while the call ran
+    static bool current(GObject *source, gpointer generation)
+    {
+        return s_agent && Bluez::self()->connection() == (void *)source
+               && Bluez::self()->generation() == GPOINTER_TO_UINT(generation);
+    }
+
+    static void registered(GObject *source, GAsyncResult *result, gpointer generation)
     {
         GError *error = 0;
         GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error);
@@ -112,17 +120,17 @@ struct BluezAgentPrivate
                 kdWarning() << "RegisterAgent: " << error->message << endl;
             g_free(remote);
         }
-        if (s_agent && (!error || already) && Bluez::self()->connection()) {
+        if ((!error || already) && current(source, generation)) {
             g_dbus_connection_call(G_DBUS_CONNECTION(Bluez::self()->connection()),
                                    "org.bluez", "/org/bluez", "org.bluez.AgentManager1",
                                    "RequestDefaultAgent", g_variant_new("(o)", agentPath),
-                                   0, G_DBUS_CALL_FLAGS_NONE, -1, 0, defaultAgent, 0);
+                                   0, G_DBUS_CALL_FLAGS_NONE, -1, 0, defaultAgent, generation);
         }
         if (error)
             g_error_free(error);
     }
 
-    static void defaultAgent(GObject *source, GAsyncResult *result, gpointer)
+    static void defaultAgent(GObject *source, GAsyncResult *result, gpointer generation)
     {
         GError *error = 0;
         GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error);
@@ -131,7 +139,7 @@ struct BluezAgentPrivate
         if (error) {
             kdWarning() << "RequestDefaultAgent: " << error->message << endl;
             g_error_free(error);
-        } else if (s_agent) {
+        } else if (current(source, generation)) {
             s_agent->m_registered = true;
             kdDebug() << "the default agent of bluetoothd" << endl;
         }
@@ -149,6 +157,7 @@ BluezAgent::BluezAgent(QObject *parent)
     connect(bluez, SIGNAL(connectionLost()), SLOT(connectionLost()));
     connect(bluez, SIGNAL(serviceChanged(bool)), SLOT(serviceChanged(bool)));
     connect(bluez, SIGNAL(deviceChanged(const QString &)), SLOT(deviceChanged(const QString &)));
+    connect(bluez, SIGNAL(deviceRemoved(const QString &)), SLOT(deviceRemoved(const QString &)));
     connect(bluez, SIGNAL(callFinished(const QString &, int, const QString &, const QString &)),
             SLOT(callFinished(const QString &, int, const QString &, const QString &)));
     if (bluez->connection())
@@ -211,7 +220,8 @@ void BluezAgent::serviceChanged(bool available)
     g_dbus_connection_call(G_DBUS_CONNECTION(Bluez::self()->connection()),
                            "org.bluez", "/org/bluez", "org.bluez.AgentManager1",
                            "RegisterAgent", g_variant_new("(os)", agentPath, "KeyboardDisplay"),
-                           0, G_DBUS_CALL_FLAGS_NONE, -1, 0, BluezAgentPrivate::registered, 0);
+                           0, G_DBUS_CALL_FLAGS_NONE, -1, 0, BluezAgentPrivate::registered,
+                           GUINT_TO_POINTER(Bluez::self()->generation()));
 }
 
 void BluezAgent::request(void *inv, const QString &method, void *params)
@@ -382,6 +392,16 @@ void BluezAgent::deviceChanged(const QString &path)
     BluezDevice d;
     if (Bluez::self()->device(path, d) && d.paired)
         closeDisplay();
+}
+
+void BluezAgent::deviceRemoved(const QString &path)
+{
+    // the device went away (removed, or out of range): bluetoothd does not
+    // always cancel what the agent shows or asks for it
+    if (m_display && m_display->devicePath() == path)
+        closeDisplay();
+    if (m_invocation && m_dialog && m_dialog->devicePath() == path)
+        cancelRequest();
 }
 
 void BluezAgent::callFinished(const QString &path, int operation, const QString &, const QString &)

@@ -80,6 +80,7 @@ private slots:
     void callFinished(const QString &path, int operation,
                       const QString &errorName, const QString &error);
     void menuActivated(int id);
+    void menuDestroyed();
     void rfkillChanged(RfKill::State state);
 
 private:
@@ -94,7 +95,7 @@ private:
     };
     int addAction(KPopupMenu *menu, const QString &text, const QString &icon,
                   Action action, const QString &arg);
-    struct MenuEntry { Action action; QString arg; };
+    struct MenuEntry { Action action; QString arg; const QObject *menu; };
     QMap<int, MenuEntry> m_menuEntries;
     int m_nextId;
     QPtrList<KPopupMenu> m_subMenus;

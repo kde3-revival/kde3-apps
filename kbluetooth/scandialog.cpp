@@ -82,7 +82,7 @@ ScanDialog::ScanDialog(BluetoothTray *tray)
 
     Bluez *bluez = Bluez::self();
     connect(bluez, SIGNAL(adaptersChanged()), SLOT(refresh()));
-    connect(bluez, SIGNAL(serviceChanged(bool)), SLOT(refresh()));
+    connect(bluez, SIGNAL(serviceChanged(bool)), SLOT(serviceChanged(bool)));
     connect(bluez, SIGNAL(deviceAdded(const QString &)), SLOT(deviceAdded(const QString &)));
     connect(bluez, SIGNAL(deviceRemoved(const QString &)), SLOT(deviceRemoved(const QString &)));
     connect(bluez, SIGNAL(deviceChanged(const QString &)), SLOT(deviceChanged(const QString &)));
@@ -109,7 +109,13 @@ void ScanDialog::showEvent(QShowEvent *e)
         return;
     m_items.clear();
     m_list->clear();
-    m_state.clear();
+    // the results of the last time go; a pairing that still runs (the
+    // dialog was closed during it) is kept, it goes on to trust and connect
+    QMap<QString, QString> active;
+    for (QMap<QString, QString>::ConstIterator it = m_state.begin(); it != m_state.end(); ++it)
+        if (isActive(it.data()))
+            active.insert(it.key(), it.data());
+    m_state = active;
     refresh();
 }
 
@@ -118,6 +124,24 @@ void ScanDialog::hideEvent(QHideEvent *e)
     KDialogBase::hideEvent(e);
     if (!e->spontaneous())
         stopDiscovery();
+}
+
+bool ScanDialog::isActive(const QString &state)
+{
+    return state == statePairing || state == stateTrusting || state == stateConnecting;
+}
+
+void ScanDialog::serviceChanged(bool available)
+{
+    if (!available) {
+        // no reply comes from a bluetoothd that went away
+        m_discovering = false;
+        for (QMap<QString, QString>::Iterator it = m_state.begin(); it != m_state.end(); ++it)
+            if (isActive(it.data()))
+                it.data() = QString::fromLatin1("%1:%2").arg(stateFailed)
+                            .arg(i18n("The Bluetooth service stopped."));
+    }
+    refresh();
 }
 
 void ScanDialog::startDiscovery()

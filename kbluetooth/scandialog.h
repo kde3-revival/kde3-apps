@@ -39,6 +39,7 @@ protected slots:
 
 private slots:
     void refresh();
+    void serviceChanged(bool available);
     void deviceAdded(const QString &path);
     void deviceRemoved(const QString &path);
     void deviceChanged(const QString &path);
@@ -52,6 +53,7 @@ private:
     void stopDiscovery();
     void updateItem(const QString &path);
     QString selectedPath() const;
+    static bool isActive(const QString &state);
 
     BluetoothTray *m_tray;
     KListView *m_list;

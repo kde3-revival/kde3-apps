@@ -42,39 +42,80 @@ struct BluezCall
     unsigned generation;
 };
 
-static QVariant toVariant(GVariant *value)
+// The properties kbluetooth uses, with their D-Bus types (BlueZ's
+// doc/org.bluez.*.rst); the others are not read.  A value with another
+// type is ignored (and a battery charge above 100).
+struct PropertyType
 {
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN))
+    const char *interface;
+    const char *name;
+    const char *type;
+};
+
+static const PropertyType propertyTypes[] = {
+    { adapterInterface, "Address", "s" },
+    { adapterInterface, "Name", "s" },
+    { adapterInterface, "Alias", "s" },
+    { adapterInterface, "Powered", "b" },
+    { adapterInterface, "PowerState", "s" },
+    { adapterInterface, "Discoverable", "b" },
+    { adapterInterface, "Discovering", "b" },
+    { deviceInterface, "Adapter", "o" },
+    { deviceInterface, "Address", "s" },
+    { deviceInterface, "Name", "s" },
+    { deviceInterface, "Alias", "s" },
+    { deviceInterface, "Icon", "s" },
+    { deviceInterface, "Paired", "b" },
+    { deviceInterface, "Trusted", "b" },
+    { deviceInterface, "Blocked", "b" },
+    { deviceInterface, "Connected", "b" },
+    { deviceInterface, "RSSI", "n" },
+    { deviceInterface, "UUIDs", "as" },
+    { batteryInterface, "Percentage", "y" },
+    { 0, 0, 0 }
+};
+
+static const char *propertyType(const char *interface, const char *name)
+{
+    for (const PropertyType *t = propertyTypes; t->interface; ++t)
+        if (!strcmp(t->interface, interface) && !strcmp(t->name, name))
+            return t->type;
+    return 0;
+}
+
+// The value of a known property, invalid when its type is not the right one
+static QVariant toVariant(const char *interface, const char *name, GVariant *value)
+{
+    const char *type = propertyType(interface, name);
+    if (!type || !g_variant_is_of_type(value, G_VARIANT_TYPE(type)))
+        return QVariant();
+    switch (type[0]) {
+    case 'b':
         return QVariant(bool(g_variant_get_boolean(value)), 0);
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_BYTE))
-        return QVariant(int(g_variant_get_byte(value)));
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_INT16))
+    case 'y': {
+        int percent = g_variant_get_byte(value);
+        return percent <= 100 ? QVariant(percent) : QVariant();
+    }
+    case 'n':
         return QVariant(int(g_variant_get_int16(value)));
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_UINT16))
-        return QVariant(uint(g_variant_get_uint16(value)));
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_INT32))
-        return QVariant(int(g_variant_get_int32(value)));
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_UINT32))
-        return QVariant(uint(g_variant_get_uint32(value)));
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_STRING)
-        || g_variant_is_of_type(value, G_VARIANT_TYPE_OBJECT_PATH))
+    case 's':
+    case 'o':
         return QVariant(QString::fromUtf8(g_variant_get_string(value, 0)));
-    if (g_variant_is_of_type(value, G_VARIANT_TYPE_STRING_ARRAY)) {
+    case 'a': {
         QStringList list;
-        gsize n = g_variant_n_children(value);
-        for (gsize i = 0; i < n; ++i) {
-            GVariant *child = g_variant_get_child_value(value, i);
-            list.append(QString::fromUtf8(g_variant_get_string(child, 0)));
-            g_variant_unref(child);
-        }
+        GVariantIter iter;
+        const gchar *s;
+        g_variant_iter_init(&iter, value);
+        while (g_variant_iter_next(&iter, "&s", &s))
+            list.append(QString::fromUtf8(s));
         return QVariant(list);
     }
-    // the other properties (ManufacturerData, ServiceData, ...) are not used
+    }
     return QVariant();
 }
 
-// The properties in an a{sv}
-static BluezProperties toProperties(GVariant *dict)
+// The known properties in an a{sv}, without those of a wrong type
+static BluezProperties toProperties(const char *interface, GVariant *dict)
 {
     BluezProperties props;
     GVariantIter iter;
@@ -82,9 +123,15 @@ static BluezProperties toProperties(GVariant *dict)
     GVariant *value;
     g_variant_iter_init(&iter, dict);
     while (g_variant_iter_next(&iter, "{&sv}", &name, &value)) {
-        QVariant v = toVariant(value);
-        if (v.isValid())
-            props.insert(QString::fromLatin1(name), v);
+        if (propertyType(interface, name)) {
+            QVariant v = toVariant(interface, name, value);
+            if (v.isValid()) {
+                props.insert(QString::fromLatin1(name), v);
+            } else {
+                kdWarning() << interface << "." << name << ": invalid value of type "
+                            << g_variant_get_type_string(value) << endl;
+            }
+        }
         g_variant_unref(value);
     }
     return props;
@@ -176,7 +223,7 @@ struct BluezPrivate
         g_variant_iter_init(&iter, interfaces);
         while (g_variant_iter_next(&iter, "{&s@a{sv}}", &interface, &props)) {
             s_self->updateInterface(path, QString::fromLatin1(interface),
-                                    toProperties(props), QStringList(), notify);
+                                    toProperties(interface, props), QStringList(), notify);
             g_variant_unref(props);
         }
     }
@@ -214,31 +261,53 @@ struct BluezPrivate
         delete c;
     }
 
+    static void badSignal(const gchar *name, GVariant *parameters)
+    {
+        kdWarning() << "ignoring " << name << " with the arguments "
+                    << g_variant_get_type_string(parameters) << endl;
+    }
+
     static void signal(GDBusConnection *, const gchar *, const gchar *objectPath,
                        const gchar *, const gchar *signalName,
                        GVariant *parameters, gpointer)
     {
         if (!s_self || !s_self->m_available)
             return;  // the reply of GetManagedObjects brings the state
+        // the arguments are not checked by GDBus for a signal: a wrong
+        // signature is dropped here
         if (!strcmp(signalName, "PropertiesChanged")) {
+            if (!g_variant_is_of_type(parameters, G_VARIANT_TYPE("(sa{sv}as)"))) {
+                badSignal(signalName, parameters);
+                return;
+            }
             const gchar *interface;
             GVariant *changed, *invalidated;
             g_variant_get(parameters, "(&s@a{sv}@as)", &interface, &changed, &invalidated);
             QString path = QString::fromUtf8(objectPath);
             QString iface = QString::fromLatin1(interface);
             // only the interfaces known from the object manager
-            if (s_self->m_objects.contains(path) && s_self->m_objects[path].contains(iface))
-                s_self->updateInterface(path, iface, toProperties(changed),
+            if (s_self->m_objects.contains(path) && s_self->m_objects[path].contains(iface)) {
+                // a value of a wrong type is dropped; the last good one stays
+                s_self->updateInterface(path, iface, toProperties(interface, changed),
                                         toStringList(invalidated), true);
+            }
             g_variant_unref(changed);
             g_variant_unref(invalidated);
         } else if (!strcmp(signalName, "InterfacesAdded")) {
+            if (!g_variant_is_of_type(parameters, G_VARIANT_TYPE("(oa{sa{sv}})"))) {
+                badSignal(signalName, parameters);
+                return;
+            }
             const gchar *path;
             GVariant *interfaces;
             g_variant_get(parameters, "(&o@a{sa{sv}})", &path, &interfaces);
             addObject(interfaces, QString::fromUtf8(path), true);
             g_variant_unref(interfaces);
         } else if (!strcmp(signalName, "InterfacesRemoved")) {
+            if (!g_variant_is_of_type(parameters, G_VARIANT_TYPE("(oas)"))) {
+                badSignal(signalName, parameters);
+                return;
+            }
             const gchar *path;
             GVariant *interfaces;
             g_variant_get(parameters, "(&o@as)", &path, &interfaces);
@@ -256,7 +325,10 @@ struct BluezPrivate
         GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error);
         if (reply)
             g_variant_unref(reply);
-        if (s_self && !(error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED))) {
+        // a reply from a bluetoothd that went away since is of no use: its
+        // end was reported with serviceChanged(false)
+        if (s_self && c->generation == s_self->m_generation
+            && !(error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED))) {
             QString name, message;
             if (error) {
                 gchar *remote = g_dbus_error_get_remote_error(error);

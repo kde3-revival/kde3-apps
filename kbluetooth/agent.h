@@ -38,6 +38,7 @@ private slots:
     void connectionLost();
     void serviceChanged(bool available);
     void deviceChanged(const QString &path);
+    void deviceRemoved(const QString &path);
     void callFinished(const QString &path, int operation,
                       const QString &errorName, const QString &error);
     void answered(bool accepted, const QString &text, bool always);

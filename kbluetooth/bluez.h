@@ -102,6 +102,10 @@ public:
     void setTrusted(const QString &devicePath, bool trusted);
     void setAlias(const QString &devicePath, const QString &alias);
 
+    // Changes each time bluetoothd or the bus connection goes away; the
+    // agent checks its replies against it
+    unsigned generation() const { return m_generation; }
+
     // The connection, a GDBusConnection *, for the agent; 0 before it is up
     void *connection() const { return m_connection; }
 

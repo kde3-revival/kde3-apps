@@ -92,7 +92,11 @@ QString BluetoothTray::adapterPath() const
 
 RfKill::State BluetoothTray::rfkillState() const
 {
-    return m_rfkill->state();
+    // the radio of the adapter in use; without one, all the radios
+    QString path = adapterPath();
+    if (path.isEmpty())
+        return m_rfkill->state();
+    return m_rfkill->state(path.section('/', -1));
 }
 
 QString BluetoothTray::problem() const
@@ -100,18 +104,19 @@ QString BluetoothTray::problem() const
     Bluez *bluez = Bluez::self();
     if (!bluez->connection() && !bluez->busError().isEmpty())
         return i18n("The system message bus (D-Bus) cannot be reached: %1").arg(bluez->busError());
-    if (m_rfkill->state() == RfKill::HardBlocked)
+    RfKill::State rfkill = rfkillState();
+    if (rfkill == RfKill::HardBlocked)
         return i18n("Bluetooth is switched off with a hardware switch or key of the computer.");
     if (!bluez->isAvailable())
         return i18n("The Bluetooth service (bluetoothd) is not running.");
     BluezAdapter adapter;
     if (!bluez->adapter(adapterPath(), adapter)) {
-        if (m_rfkill->state() == RfKill::SoftBlocked)
+        if (rfkill == RfKill::SoftBlocked)
             return i18n("Bluetooth is blocked (rfkill). Unblocking it needs administrator "
                         "rights, for example: rfkill unblock bluetooth");
         return i18n("No Bluetooth adapter was found.");
     }
-    if (m_rfkill->state() == RfKill::SoftBlocked || adapter.powerState == "off-blocked")
+    if (rfkill == RfKill::SoftBlocked || adapter.powerState == "off-blocked")
         return i18n("Bluetooth is blocked (rfkill). Unblocking it needs administrator "
                     "rights, for example: rfkill unblock bluetooth");
     return QString::null;
@@ -194,8 +199,8 @@ void BluetoothTray::powerOnLogin()
         return;
     m_poweredOnce.append(adapter.address);
     // a blocked radio cannot be switched on; the icon says why
-    if (!adapter.powered && m_rfkill->state() != RfKill::SoftBlocked
-        && m_rfkill->state() != RfKill::HardBlocked
+    if (!adapter.powered && rfkillState() != RfKill::SoftBlocked
+        && rfkillState() != RfKill::HardBlocked
         && adapter.powerState != "off-blocked")
         Bluez::self()->setPowered(adapter.path, true);
 }
@@ -392,6 +397,11 @@ int BluetoothTray::addAction(KPopupMenu *menu, const QString &text, const QStrin
     MenuEntry entry;
     entry.action = action;
     entry.arg = arg;
+    entry.menu = menu;
+    // the entries go with their menu (the popup deletes its device menus);
+    // one connection per menu
+    disconnect(menu, SIGNAL(destroyed()), this, SLOT(menuDestroyed()));
+    connect(menu, SIGNAL(destroyed()), SLOT(menuDestroyed()));
     m_menuEntries.insert(id, entry);
     return id;
 }
@@ -550,6 +560,17 @@ void BluetoothTray::menuActivated(int id)
         writeSettings();
         break;
     }
+}
+
+void BluetoothTray::menuDestroyed()
+{
+    const QObject *menu = sender();
+    QValueList<int> ids;
+    for (QMap<int, MenuEntry>::ConstIterator it = m_menuEntries.begin(); it != m_menuEntries.end(); ++it)
+        if (it.data().menu == menu)
+            ids.append(it.key());
+    for (QValueList<int>::ConstIterator it = ids.begin(); it != ids.end(); ++it)
+        m_menuEntries.remove(*it);
 }
 
 void BluetoothTray::powerOn()

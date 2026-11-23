@@ -15,6 +15,7 @@
 #ifndef KBLUETOOTH_RFKILL_H
 #define KBLUETOOTH_RFKILL_H
 
+#include <qmap.h>
 #include <qobject.h>
 
 class QSocketNotifier;
@@ -29,9 +30,12 @@ public:
     RfKill(QObject *parent = 0);
     virtual ~RfKill();
 
-    // the strongest block of all Bluetooth radios: one radio that is
-    // unblocked makes it Unblocked
+    // for the case without an adapter: the least blocked of all Bluetooth
+    // radios (one unblocked radio makes it Unblocked)
     State state() const { return m_state; }
+    // the state of one adapter ("hci0"): its own radio, blocked also by a
+    // switch of the platform (thinkpad_acpi, ...), which blocks them all
+    State state(const QString &adapter) const;
 
 signals:
     void changed(RfKill::State state);
@@ -46,6 +50,7 @@ private:
     QSocketNotifier *m_notifier;
     QTimer *m_timer;
     State m_state;
+    QMap<QString, State> m_radios;  // name (hci0, tpacpi_bluetooth_sw) -> state
 };
 
 #endif

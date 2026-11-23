@@ -25,6 +25,7 @@
 
 import sys
 import dbus
+import dbus.lowlevel
 import dbus.service
 import dbus.mainloop.glib
 from gi.repository import GLib
@@ -452,6 +453,37 @@ class Control(dbus.service.Object):
         self.mock.callAgent('AuthorizeService', [dbus.ObjectPath(d.path), uuid],
                             lambda *a: ok('allowed'),
                             lambda e: ok('rejected: %s' % e.get_dbus_name()))
+
+    @dbus.service.method('org.kde3.MockBluez', in_signature='s')
+    def IncomingDisplay(self, address):
+        # a keyboard pairs from its side and shows a passkey to type; no
+        # pending request is made for it (like BlueZ's DisplayPasskey)
+        d = self.mock.device(address)
+        self.mock.callAgent('DisplayPasskey', [dbus.ObjectPath(d.path), dbus.UInt32(135790),
+                                               dbus.UInt16(2)], lambda *a: None, lambda e: None)
+
+    @dbus.service.method('org.kde3.MockBluez', in_signature='s')
+    def Malformed(self, address):
+        # signals with wrong signatures, and properties with wrong types
+        d = self.mock.device(address)
+        bus = self.mock.bus
+
+        def raw(path, iface, member, signature, args):
+            m = dbus.lowlevel.SignalMessage(path, iface, member)
+            m.append(*args, signature=signature)
+            bus.send_message(m)
+        raw(d.path, PROPS, 'PropertiesChanged', 's', [DEVICE])
+        raw(d.path, PROPS, 'PropertiesChanged', 'sa{ss}as', [DEVICE, {'Connected': 'yes'}, []])
+        raw('/', OM, 'InterfacesAdded', 'sa{sa{sv}}', ['/x', {}])
+        raw('/', OM, 'InterfacesRemoved', 'oa{sv}', [d.path, {}])
+        raw('/', OM, 'InterfacesRemoved', '', [])
+        a = d.adapter
+        a.PropertiesChanged(ADAPTER, {'Powered': 'yes', 'Alias': dbus.Int32(5)}, [])
+        d.PropertiesChanged(DEVICE, {'RSSI': 'strong', 'Adapter': '/org/bluez/hci9',
+                                     'Connected': dbus.Int32(1), 'UUIDs': 'x'}, [])
+        if BATTERY in d.props:
+            d.PropertiesChanged(BATTERY, {'Percentage': dbus.Byte(150)}, [])
+            d.PropertiesChanged(BATTERY, {'Percentage': dbus.Int32(40)}, [])
 
     @dbus.service.method('org.kde3.MockBluez', in_signature='s', out_signature='s')
     def Dump(self, address):
