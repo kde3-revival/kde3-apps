@@ -99,9 +99,11 @@ private:
         QTime time;
         double temperature, precipitation, probability, windSpeed, windDirection;
         bool hasTemperature, hasPrecipitation, hasProbability, hasWind, hasDirection;
+        long stamp;     // unix time, 0 if unknown
     };
 
     double x(int i) const;
+    QString valueLabel(int i) const;
     int labelStep() const;
 
     QValueList<Point> m_points;

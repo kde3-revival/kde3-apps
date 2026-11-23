@@ -284,6 +284,7 @@ QSize HourChart::sizeHint() const
 void HourChart::setHours(const QStringList &hours)
 {
     m_points.clear();
+    m_tempUnit = m_precipUnit = m_windUnit = QString::null;
     for (QStringList::ConstIterator it = hours.begin(); it != hours.end(); ++it) {
         QStringList f = QStringList::split(QChar('\t'), *it, true);
         Point pt;
@@ -293,10 +294,25 @@ void HourChart::setHours(const QStringList &hours)
         pt.probability = number(f, 4, &pt.hasProbability);
         pt.windSpeed = number(f, 6, &pt.hasWind);
         pt.windDirection = number(f, 7, &pt.hasDirection);
+        bool ok;
+        pt.stamp = long(number(f, 11, &ok));
+        if (!ok)
+            pt.stamp = 0;
+        // one scale per quantity: the units of the first hour; hours in
+        // other units (from a download in the old units) are left out
+        if (m_tempUnit.isEmpty())
+            m_tempUnit = field(f, 8);
+        if (m_precipUnit.isEmpty())
+            m_precipUnit = field(f, 9);
+        if (m_windUnit.isEmpty())
+            m_windUnit = field(f, 10);
+        if (field(f, 8) != m_tempUnit)
+            pt.hasTemperature = false;
+        if (field(f, 9) != m_precipUnit)
+            pt.hasPrecipitation = pt.hasProbability = false;
+        if (field(f, 10) != m_windUnit)
+            pt.hasWind = pt.hasDirection = false;
         m_points.append(pt);
-        m_tempUnit = field(f, 8);
-        m_precipUnit = field(f, 9);
-        m_windUnit = field(f, 10);
     }
     update();
 }
@@ -315,7 +331,25 @@ QString HourChart::unit() const
 
 double HourChart::x(int i) const
 {
-    return (i + 0.5) * width() / QMAX(1, int(m_points.count()));
+    // by time: a missing hour leaves its place empty
+    int n = m_points.count();
+    long first = n ? m_points[0].stamp : 0, last = n ? m_points[n - 1].stamp : 0;
+    if (n && first > 0 && last >= first && m_points[i].stamp >= first)
+        return (m_points[i].stamp - first + 1800.0) / (last - first + 3600.0) * width();
+    return (i + 0.5) * width() / QMAX(1, n);
+}
+
+QString HourChart::valueLabel(int i) const
+{
+    const Point &pt = m_points[i];
+    if (m_kind == Temperature)
+        return pt.hasTemperature ? degrees(pt.temperature) : QString::null;
+    if (m_kind == Precipitation)
+        return pt.hasProbability ? i18n("%1 %").arg(long(pt.probability))
+             : pt.hasPrecipitation ? KGlobal::locale()->formatNumber(pt.precipitation,
+                                                                     m_precipUnit == "in" ? 2 : 1)
+             : QString::null;
+    return pt.hasWind ? QString::number(lround(pt.windSpeed)) : QString::null;
 }
 
 /** A label of width w centred at @p cx, moved inside the widget. */
@@ -328,9 +362,17 @@ static QRect labelRect(int cx, int top, int w, int h, int widgetWidth)
 int HourChart::labelStep() const
 {
     // every 3 hours like the hours of a clock face, more apart when narrow
-    QFontMetrics fm(font());
+    // the room of the widest label, time or value (bold), as shown
+    QFont bold = font();
+    bold.setBold(true);
+    QFontMetrics fm(font()), bm(bold);
     int n = m_points.count();
-    int room = fm.width(QString::fromLatin1("00:00")) + 10;
+    int room = 0;
+    for (int i = 0; i < n; ++i) {
+        room = QMAX(room, fm.width(KGlobal::locale()->formatTime(m_points[i].time)));
+        room = QMAX(room, bm.width(valueLabel(i)));
+    }
+    room += 10;
     static const int steps[] = { 1, 2, 3, 4, 6, 8, 12, 24 };
     for (int i = 0; i < 8; ++i) {
         int s = steps[i];
@@ -417,23 +459,27 @@ void HourChart::paintEvent(QPaintEvent *)
                 if (!m_points[i].hasTemperature)
                     continue;
                 int yy = int(bottom - (m_points[i].temperature - base) / (peak - base) * (bottom - top));
-                p.drawText(labelRect(int(x(i)), yy - fm.height() - 3, 60, fm.height(), width()),
-                           Qt::AlignCenter, degrees(m_points[i].temperature));
+                QString t = valueLabel(i);
+                p.drawText(labelRect(int(x(i)), yy - fm.height() - 3, QFontMetrics(bold).width(t) + 4,
+                                     fm.height(), width()), Qt::AlignCenter, t);
             }
             p.setFont(font());
         }
     } else if (m_kind == Precipitation) {
         bool inch = m_precipUnit == "in";
         double most = inch ? 0.04 : 1.0;            // the scale goes at least to 1 mm
-        bool any = false;
+        bool any = false, known = false;
         for (int i = 0; i < n; ++i) {
+            if (m_points[i].hasPrecipitation || m_points[i].hasProbability)
+                known = true;
             if (m_points[i].hasPrecipitation)
                 most = QMAX(most, m_points[i].precipitation);
             if ((m_points[i].hasPrecipitation && m_points[i].precipitation > 0)
                 || (m_points[i].hasProbability && m_points[i].probability >= 10))
                 any = true;
         }
-        int bw = QMAX(2, int(width() / double(n) * 0.6));
+        // the width of an hour (by time, so gaps stay gaps)
+        int bw = QMAX(2, int((n > 1 ? (x(n - 1) - x(0)) / (n - 1) : width()) * 0.6));
         p.setPen(Qt::NoPen);
         p.setBrush(rainColor(cg));
         for (int i = 0; i < n; ++i) {
@@ -444,16 +490,18 @@ void HourChart::paintEvent(QPaintEvent *)
         }
         p.setPen(secondaryColor(cg));
         p.drawLine(0, bottom, width(), bottom);
-        if (!any) {
+        if (!known) {
+            // unknown is not dry
+            p.drawText(QRect(0, top, width(), bottom - top), Qt::AlignCenter,
+                       i18n("The model gives no precipitation for these hours"));
+        } else if (!any) {
             p.drawText(QRect(0, top, width(), bottom - top), Qt::AlignCenter,
                        i18n("No precipitation expected"));
         } else {
             for (int i = 0; i < n; i += step) {
-                const Point &pt = m_points[i];
-                QString t = pt.hasProbability ? i18n("%1 %").arg(long(pt.probability))
-                          : pt.hasPrecipitation ? loc->formatNumber(pt.precipitation, inch ? 2 : 1)
-                          : QString::null;
-                p.drawText(labelRect(int(x(i)), 0, 60, fm.height(), width()), Qt::AlignCenter, t);
+                QString t = valueLabel(i);
+                p.drawText(labelRect(int(x(i)), 0, fm.width(t) + 4, fm.height(), width()),
+                           Qt::AlignCenter, t);
             }
         }
     } else {
@@ -492,10 +540,9 @@ void HourChart::paintEvent(QPaintEvent *)
         s.drawOn(p);
         p.setPen(cg.foreground());
         for (int i = 0; i < n; i += step) {
-            const Point &pt = m_points[i];
-            if (pt.hasWind)
-                p.drawText(labelRect(int(x(i)), 0, 60, fm.height(), width()), Qt::AlignCenter,
-                           QString::number(lround(pt.windSpeed)));
+            QString t = valueLabel(i);
+            p.drawText(labelRect(int(x(i)), 0, fm.width(t) + 4, fm.height(), width()),
+                       Qt::AlignCenter, t);
         }
     }
 

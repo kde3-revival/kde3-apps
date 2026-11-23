@@ -18,6 +18,8 @@
 #include <qpainter.h>
 #include <qstringlist.h>
 #include <qstylesheet.h>
+#include <qscrollbar.h>
+#include <qscrollview.h>
 #include <qtabbar.h>
 #include <qtooltip.h>
 
@@ -126,30 +128,61 @@ QWidget *separator(QWidget *parent)
 }
 
 ForecastPopup::ForecastPopup(WeatherService_stub *service,
-                             const QString &location, QWidget *parent,
-                             const char *name)
-    : QFrame(parent, name, WType_Popup), m_content(0), m_service(service),
+                             const QString &location, bool horizontalPanel,
+                             QWidget *parent, const char *name)
+    : QFrame(parent, name, WType_Popup), m_scroll(0), m_content(0), m_service(service),
       m_location(location), m_chart(0), m_strip(0), m_tabs(0), m_dayCaption(0),
       m_day(0), m_kind(HourChart::Temperature)
 {
     setFrameStyle(QFrame::PopupPanel | QFrame::Raised);
     setLineWidth(1);
     setMargin(0);
-    new QVBoxLayout(this, frameWidth(), 0);
+    QVBoxLayout *outer = new QVBoxLayout(this, frameWidth(), 0);
+    // scrolls only when even the most compact contents are too high
+    m_scroll = new QScrollView(this);
+    m_scroll->setFrameStyle(QFrame::NoFrame);
+    m_scroll->setHScrollBarMode(QScrollView::AlwaysOff);
+    m_scroll->setVScrollBarMode(QScrollView::AlwaysOff);
+    m_scroll->setFocusPolicy(NoFocus);
+    m_scroll->viewport()->setFocusPolicy(NoFocus);
+    m_scroll->viewport()->setBackgroundMode(PaletteBackground);
+    outer->addWidget(m_scroll);
 
     // everything if it fits the work area of the screen, else less, step
     // by step (see build())
     QDesktopWidget *desktop = QApplication::desktop();
-    int height = desktop->availableGeometry(desktop->screenNumber(parent)).height();
+    QRect area = desktop->availableGeometry(desktop->screenNumber(parent));
+    int space = area.height();
+    // beside a horizontal panel: the room above or below the applet (the
+    // work area may still include the panel)
+    if (horizontalPanel && parent) {
+        QRect screen = desktop->screenGeometry(desktop->screenNumber(parent));
+        QRect anchor(parent->mapToGlobal(QPoint(0, 0)), parent->size());
+        space = QMIN(space, QMAX(anchor.top() - screen.top(), screen.bottom() - anchor.bottom()));
+    }
+    int room = space - 2 * frameWidth();
+    int h = 0;
     for (int level = 0; ; ++level) {
         build(service, location, level);
-        if (sizeHint().height() <= height || level >= maxLevel)
+        h = m_content->sizeHint().height();
+        if (h <= room || level >= maxLevel)
             break;
+    }
+    int contentWidth = width() - 2 * frameWidth();
+    m_content->resize(contentWidth, h);
+    if (h <= room) {
+        m_scroll->setFixedSize(contentWidth, h);
+    } else {
+        int bar = m_scroll->verticalScrollBar()->sizeHint().width();
+        m_scroll->setVScrollBarMode(QScrollView::AlwaysOn);
+        setFixedWidth(QMIN(width() + bar, area.width()));
+        m_scroll->setFixedSize(width() - 2 * frameWidth(), room);
     }
 }
 
 /** The contents; from level 1 on, the more compact: a smaller current
-    weather (1), 5 days (2), 3 days (3), smaller icons (4), no details (5). */
+    weather (1), a lower chart (2), no details (3), smaller icons on the
+    cards (4), a still lower chart (5). */
 void ForecastPopup::build(WeatherService_stub *service, const QString &location,
                           int level)
 {
@@ -158,9 +191,10 @@ void ForecastPopup::build(WeatherService_stub *service, const QString &location,
     m_strip = 0;
     m_tabs = 0;
     m_dayCaption = 0;
-    m_content = new QWidget(this);
+    m_content = new QWidget(m_scroll->viewport());
+    m_content->setBackgroundMode(PaletteBackground);
+    m_scroll->addChild(m_content);
     QWidget *w = m_content;
-    layout()->add(w);
 
     const int margin = KDialog::marginHint();
     const int spacing = KDialog::spacingHint();
@@ -187,7 +221,7 @@ void ForecastPopup::build(WeatherService_stub *service, const QString &location,
 
     // smaller when the screen is too short for everything
     const bool compact = level >= 1;
-    const int chartHeight = (level >= 2 ? 6 : 9) * fm.height();
+    const int chartHeight = (level >= 5 ? 4 : level >= 2 ? 6 : 9) * fm.height();
     const bool withDetails = level < 3;
     const int cardIcon = level >= 4 ? 22 : dayIcon;
 
@@ -328,7 +362,6 @@ void ForecastPopup::build(WeatherService_stub *service, const QString &location,
                          left, 0.8, false, true));
 
     w->show();
-    layout()->activate();
 }
 
 void ForecastPopup::popup(const QRect &anchor, int direction)
@@ -370,7 +403,7 @@ void ForecastPopup::showDay()
     if (!m_chart || m_dates.isEmpty())
         return;
     QDate date = m_dates[QMIN(m_day, int(m_dates.count()) - 1)];
-    bool today = date <= m_today;
+    bool today = date == m_today;
     m_chart->setHours(m_service->dayHours(m_location,
                                           today ? QString::null : date.toString(Qt::ISODate)));
     updateCaption();
@@ -381,7 +414,7 @@ void ForecastPopup::updateCaption()
     if (!m_dayCaption || m_dates.isEmpty())
         return;
     QDate date = m_dates[QMIN(m_day, int(m_dates.count()) - 1)];
-    QString day = date <= m_today ? i18n("Next 24 hours")
+    QString day = date == m_today ? i18n("Next 24 hours")
                 : KGlobal::locale()->formatDate(date, false);
     QString unit = m_chart->unit();
     m_dayCaption->setText(unit.isEmpty() ? day : i18n("day and unit", "%1 \xc2\xb7 %2").arg(day).arg(unit));
