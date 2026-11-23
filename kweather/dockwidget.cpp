@@ -34,7 +34,7 @@
 
 dockwidget::dockwidget(const QString &location, QWidget *parent,
         const char *name) : QWidget(parent,name), m_locationCode( location ), m_orientation( Horizontal ),
-        m_iconSize( 22 )
+        m_iconSize( 22 ), m_lines( 1 )
 {
     m_font = KGlobalSettings::generalFont();
     setBackgroundOrigin( AncestorOrigin );
@@ -59,24 +59,16 @@ void dockwidget::setViewMode(int _mode)
 {
     kdDebug(12004) << "View mode " << _mode << endl;
     m_mode = _mode;
-    if (m_mode == ShowIconOnly)
-    {
-        m_lblTemp->hide();
-        m_lblWind->hide();
-        m_lblPres->hide();
-    }
-    else if (m_mode == ShowTempOnly)
-    {
-        m_lblTemp->show();
-        m_lblWind->hide();
-        m_lblPres->hide();
-    }
-    else if (m_mode == ShowAll)
-    {
-        m_lblTemp->show();
-        m_lblWind->show();
-        m_lblPres->show();
-    }
+    m_lines = m_mode == ShowAll ? 3 : m_mode == ShowTempOnly ? 1 : 0;
+    showLines();
+}
+
+/** Shows the first m_lines lines of text: temperature, wind, pressure. */
+void dockwidget::showLines()
+{
+    if (m_lines >= 1) m_lblTemp->show(); else m_lblTemp->hide();
+    if (m_lines >= 3) m_lblWind->show(); else m_lblWind->hide();
+    if (m_lines >= 3) m_lblPres->show(); else m_lblPres->hide();
 }
 
 void dockwidget::showWeather()
@@ -194,8 +186,9 @@ int dockwidget::iconSizeFor(int thickness)
 
 /** The panel font, smaller when @p lines lines of it do not fit into
     @p height pixels or when @p text is wider than @p width (0: any). */
-void dockwidget::fitFont(int lines, int height, int width, const QString &text)
+bool dockwidget::fitFont(int lines, int height, int width, const QString &text)
 {
+    bool fits = false;
     m_font = KGlobalSettings::generalFont();
     QFontMetrics general(m_font);
     // a line is higher than the pixel size: shrink until it all fits
@@ -203,26 +196,27 @@ void dockwidget::fitFont(int lines, int height, int width, const QString &text)
         if (px < general.height())
             m_font.setPixelSize(px);
         QFontMetrics fm(m_font);
-        bool fits = (height <= 0 || lines * fm.height() <= height)
-                    && (width <= 0 || text.isEmpty() || fm.width(text) <= width);
+        fits = (height <= 0 || lines * fm.height() <= height)
+               && (width <= 0 || text.isEmpty() || fm.width(text) <= width);
         if (fits || px <= 8)
             break;
     }
     updateFont();
+    return fits;
 }
 
 int dockwidget::textLines() const
 {
-    return m_mode == ShowAll ? 3 : m_mode == ShowTempOnly ? 1 : 0;
+    return m_lines;
 }
 
 int dockwidget::textWidth() const
 {
     QFontMetrics fm(m_font);
     int w = 0;
-    if (m_mode == ShowTempOnly || m_mode == ShowAll)
+    if (m_lines >= 1)
         w = fm.width(m_lblTemp->text());
-    if (m_mode == ShowAll)
+    if (m_lines >= 3)
         w = QMAX(w, QMAX(fm.width(m_lblWind->text()), fm.width(m_lblPres->text())));
     return w;
 }
@@ -271,14 +265,24 @@ void dockwidget::resizeView( const QSize &size )
 int dockwidget::widthForHeight(int h)
 {
     int icon = iconSizeFor(h) + 2 * buttonMargin;
-    if (!textLines())
+    // the lines of the view mode; on a panel too thin for three lines even
+    // at the smallest font, the temperature alone, else no text
+    int wanted = m_mode == ShowAll ? 3 : m_mode == ShowTempOnly ? 1 : 0;
+    m_lines = wanted;
+    if (m_lines == 3 && !fitFont(3, h, 0, QString::null))
+        m_lines = 1;
+    if (m_lines == 1 && !fitFont(1, h, 0, QString::null))
+        m_lines = 0;
+    showLines();
+    if (!m_lines)
         return icon;
-    fitFont(textLines(), h, 0, QString::null);
     return icon + 3 + textWidth() + 2;
 }
 
 int dockwidget::heightForWidth( int w )
 {
+    m_lines = m_mode == ShowAll ? 3 : m_mode == ShowTempOnly ? 1 : 0;
+    showLines();
     int icon = iconSizeFor(w) + 2 * buttonMargin;
     if (!textLines())
         return icon;

@@ -55,7 +55,8 @@ signals: // Signals
 private:
     void initDock();
     void updateFont();
-    void fitFont(int lines, int height, int width, const QString &text);
+    bool fitFont(int lines, int height, int width, const QString &text);
+    void showLines();
     int textLines() const;
     int textWidth() const;
     void setIconSize(int size);
@@ -74,6 +75,7 @@ private:
     QLabel *m_lblPres;
     Orientation m_orientation;
     int m_iconSize;
+    int m_lines;            // of text shown: may be fewer than the mode has
 
     WeatherService_stub *m_weatherService;
 };

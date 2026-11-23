@@ -104,8 +104,13 @@ QLabel *label(QWidget *parent, const QString &text, int align, double scale = 1.
     l->setAlignment(align | Qt::SingleLine);
     if (scale != 1.0 || bold) {
         QFont f = l->font();
-        if (scale != 1.0)
-            f.setPointSizeFloat(f.pointSizeFloat() * scale);
+        if (scale != 1.0) {
+            // fonts given in pixels have no point size (-1)
+            if (f.pointSizeFloat() > 0)
+                f.setPointSizeFloat(f.pointSizeFloat() * scale);
+            else if (f.pixelSize() > 0)
+                f.setPixelSize(QMAX(6, int(f.pixelSize() * scale + 0.5)));
+        }
         f.setBold(bold);
         l->setFont(f);
     }
@@ -197,7 +202,13 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
     column += 2 * spacing;
     // at least 36 average characters: room for the details row
     column = QMAX(column, (36 * fm.width(QChar('x')) + 11) / 12);
-    setFixedWidth(12 * column + 2 * margin + 2 * frameWidth());
+    // 12 hours, or fewer on a narrow screen or with a large font
+    QRect screen = QApplication::desktop()->screenGeometry(parent);
+    int hourColumns = (screen.width() - 2 * margin - 2 * frameWidth() - 16) / column;
+    hourColumns = QMAX(4, QMIN(12, hourColumns));
+    setFixedWidth(QMIN(hourColumns * column + 2 * margin + 2 * frameWidth(), screen.width()));
+    // the day bars: 3 columns at full width, less when the popup is narrower
+    const int barWidth = column * QMAX(1, QMIN(3, hourColumns - 9));
 
     // the place, and when the data is from
     QHBoxLayout *header = new QHBoxLayout(top, spacing);
@@ -240,14 +251,24 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
         QHBoxLayout *details = new QHBoxLayout(top, 3 * spacing);
         const char *names[] = { I18N_NOOP("Wind"), I18N_NOOP("Humidity"), I18N_NOOP("Pressure"),
                                 I18N_NOOP("Next hour"), I18N_NOOP("Sun") };
+        // "no rain" only when the next hours have amounts: unknown is not dry
         QString rain = service->rainNextHour(location);
+        if (rain.isEmpty()) {
+            QStringList next = service->hourlyValues(location, 2);
+            bool known = next.count() == 2;
+            for (QStringList::ConstIterator it = next.begin(); it != next.end(); ++it)
+                if (field(QStringList::split(QChar('\t'), *it, true), 3).isEmpty())
+                    known = false;
+            if (known)
+                rain = i18n("no rain");
+        }
         QString rise = service->sunRiseTime(location);
         QString set = service->sunSetTime(location);
         QString values[] = {
             service->wind(location),
             service->relativeHumidity(location),
             service->pressure(location),
-            rain.isEmpty() ? i18n("no rain") : rain,
+            rain,
             rise.isEmpty() || set.isEmpty() ? QString::null
                 : i18n("sunrise - sunset", "%1 \xe2\x80\x93 %2").arg(rise).arg(set)
         };
@@ -262,7 +283,7 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
         top->addWidget(separator(this));
 
         // the next 12 hours: equal columns
-        QStringList hours = service->hourlyValues(location, 12);
+        QStringList hours = service->hourlyValues(location, hourColumns);
         if (!hours.isEmpty()) {
             QStringList first = QStringList::split(QChar('\t'), hours.first(), true);
             QLabel *caption = label(this, i18n("Next hours"), left, 1.0, true);
@@ -272,10 +293,10 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
                                     .arg(field(first, 6)).arg(field(first, 7)),
                                 left, 0.85, false, true));
             ch->addStretch();
-            QGridLayout *grid = new QGridLayout(top, 4, 12, 0);
+            QGridLayout *grid = new QGridLayout(top, 4, hourColumns, 0);
             grid->setRowSpacing(1, hourIcon + 4);
             int c = 0;
-            for (QStringList::ConstIterator it = hours.begin(); it != hours.end() && c < 12; ++it, ++c) {
+            for (QStringList::ConstIterator it = hours.begin(); it != hours.end() && c < hourColumns; ++it, ++c) {
                 QStringList f = QStringList::split(QChar('\t'), *it, true);
                 bool ok;
                 QDateTime t = QDateTime::fromString(field(f, 0), Qt::ISODate);
@@ -345,7 +366,7 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
                 grid->addWidget(label(this, okLo ? degrees(lo) : QString::null, right, 1.0, false, true), row, 3);
                 if (okHi && okLo) {
                     RangeBar *bar = new RangeBar(this, weekMin, weekMax, lo, hi);
-                    bar->setFixedWidth(3 * column);
+                    bar->setFixedWidth(barWidth);
                     grid->addWidget(bar, row, 4, Qt::AlignCenter);
                 }
                 grid->addWidget(label(this, okHi ? degrees(hi) : QString::null, right, 1.0, true), row, 5);
@@ -362,7 +383,7 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
             grid->addColSpacing(0, fm.width(i18n("Wednesday")) + 2 * spacing);
             grid->addColSpacing(1, dayIcon + 2 * spacing);
             grid->addColSpacing(3, degreesWidth + spacing);
-            grid->addColSpacing(4, 3 * column + 2 * spacing);
+            grid->addColSpacing(4, barWidth + 2 * spacing);
             grid->addColSpacing(5, degreesWidth + spacing);
             grid->addColSpacing(6, fm.width(loc->formatNumber(88.8, 1)) + 3 * spacing);
             grid->addColSpacing(7, fm.width(QString::fromLatin1("100 %")) + 2 * spacing);
