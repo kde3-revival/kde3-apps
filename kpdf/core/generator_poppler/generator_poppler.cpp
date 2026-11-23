@@ -515,6 +515,7 @@ bool PopplerGenerator::print( KPrinter& printer )
     else
         for(int i = 1; i <= pageCount; i++) pageList.append(i);
 
+    bool failed = false;
     docLock.lock();
     QValueList<int>::const_iterator pIt = pageList.begin(), pEnd = pageList.end();
     for ( ; pIt != pEnd; ++pIt )
@@ -550,14 +551,19 @@ bool PopplerGenerator::print( KPrinter& printer )
         if ( forceRasterize )
         {
             // an image at 300 dpi of the printed size
+            // (at most what a cairo image surface holds)
             double dpiScale = 300.0 / 72.0 * QMAX( sx, sy );
-            int iw = (int)ceil( w * dpiScale ), ih = (int)ceil( h * dpiScale );
+            dpiScale = QMIN( dpiScale, QMIN( 32767.0 / w, 32767.0 / h ) );
+            int iw = QMAX( 1, (int)( w * dpiScale ) ), ih = QMAX( 1, (int)( h * dpiScale ) );
             cairo_surface_t * img = cairo_image_surface_create( CAIRO_FORMAT_RGB24, iw, ih );
             cairo_t * icr = cairo_create( img );
             cairo_set_source_rgb( icr, 1, 1, 1 );
             cairo_paint( icr );
             cairo_scale( icr, iw / w, ih / h );
             poppler_page_render_for_printing( page, icr );
+            if ( cairo_status( icr ) != CAIRO_STATUS_SUCCESS ||
+                 cairo_surface_status( img ) != CAIRO_STATUS_SUCCESS )
+                failed = true;
             cairo_destroy( icr );
             cairo_scale( cr, w / iw, h / ih );
             cairo_set_source_surface( cr, img, 0, 0 );
@@ -567,19 +573,24 @@ bool PopplerGenerator::print( KPrinter& printer )
         else
             poppler_page_render_for_printing( page, cr );
         cairo_show_page( cr );
+        if ( cairo_status( cr ) != CAIRO_STATUS_SUCCESS )
+            failed = true;
         cairo_destroy( cr );
+        if ( failed )
+            break;
     }
     docLock.unlock();
 
     cairo_surface_finish( surface );
-    bool ok = cairo_surface_status( surface ) == CAIRO_STATUS_SUCCESS;
+    bool ok = !failed && cairo_surface_status( surface ) == CAIRO_STATUS_SUCCESS;
     cairo_surface_destroy( surface );
-    if ( !ok )
+    // printFiles() removes the file once it is printed
+    if ( !ok || !printer.printFiles( tf.name(), true ) )
     {
-        tf.unlink();
+        if ( QFile::exists( tf.name() ) )
+            tf.unlink();
         return false;
     }
-    printer.printFiles( tf.name(), true );
     return true;
 }
 
