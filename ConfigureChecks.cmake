@@ -81,6 +81,10 @@ if(KDE3_APPS_KSNAPSHOT)
   option(KDE3_APPS_KSNAPSHOT_XSHAPE
     "Cut non-rectangular windows to their shape in KSnapshot (X Shape extension)" ON)
 endif()
+if(NOT (KDE3_APPS_KSNAPSHOT AND KDE3_APPS_KSNAPSHOT_XSHAPE))
+  # a probe cached by an earlier configure must not switch it back on
+  unset(HAVE_X11_EXTENSIONS_SHAPE_H CACHE)
+endif()
 if(KDE3_APPS_KSNAPSHOT AND KDE3_APPS_KSNAPSHOT_XSHAPE)
   cmake_push_check_state(RESET)
   set(CMAKE_REQUIRED_INCLUDES ${X11_INCLUDE_DIR})

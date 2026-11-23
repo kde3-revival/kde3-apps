@@ -118,7 +118,8 @@ As stated in the source files:
   `kcalc/knumber/` (version 2 or later), `khexedit/lib/` and
   `khexedit/parts/` (the KHexEdit2 widget library and its KPart, version 2),
   `kview/kimageviewer/` (the KImageViewer interfaces, version 2).
-- The handbooks in `doc/` are under the GNU Free Documentation License 1.2.
+- The handbooks in `doc/` are under the GNU Free Documentation License,
+  version 1.1 or any later version (their `&FDLNotice;`).
 
 `COPYING` holds the GPL version 2, `COPYING-DOCS` the GFDL 1.2.
 
