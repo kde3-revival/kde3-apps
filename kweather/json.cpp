@@ -180,6 +180,10 @@ private:
             char c = m_text[m_pos++];
             if (c == '"')
                 break;
+            if (static_cast<unsigned char>(c) < 0x20) {   // raw control character
+                m_error = true;
+                break;
+            }
             if (c != '\\') {
                 utf8 += c;
                 continue;
@@ -211,27 +215,51 @@ private:
         return result;
     }
 
+    bool digit() const { return peek() >= '0' && peek() <= '9'; }
+
+    // -?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?
     QVariant number()
     {
         uint start = m_pos;
-        while (m_pos < m_text.size()) {
-            char c = m_text[m_pos];
-            if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.'
-                || c == 'e' || c == 'E')
+        if (peek() == '-')
+            ++m_pos;
+        if (peek() == '0') {
+            ++m_pos;
+        } else if (digit()) {
+            while (digit())
                 ++m_pos;
-            else
-                break;
-        }
-        if (m_pos == start) {
+        } else {
             m_error = true;
             return QVariant();
+        }
+        if (peek() == '.') {
+            ++m_pos;
+            if (!digit()) {
+                m_error = true;
+                return QVariant();
+            }
+            while (digit())
+                ++m_pos;
+        }
+        if (peek() == 'e' || peek() == 'E') {
+            ++m_pos;
+            if (peek() == '+' || peek() == '-')
+                ++m_pos;
+            if (!digit()) {
+                m_error = true;
+                return QVariant();
+            }
+            while (digit())
+                ++m_pos;
         }
         // not strtod(): it follows LC_NUMERIC
         QString digits = QString::fromLatin1(m_text.data() + start, m_pos - start);
         bool ok = false;
         double d = QLocale::c().toDouble(digits, &ok);
-        if (!ok)
-            m_error = true;
+        if (!ok) {
+            // out of the range of a double (1e400): not usable
+            return QVariant();
+        }
         return QVariant(d);
     }
 
