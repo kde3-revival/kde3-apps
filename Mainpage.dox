@@ -1,6 +1,9 @@
-/** @mainpage KDE Utilities
+/** @mainpage kde3-apps
 *
-* The KDE Utilities module collects small desk utilities:
+* kde3-apps collects the applications of the KDE3 revival desktop that
+* are not part of kdelibs, kdebase or kdepim.
+*
+* From kdeutils:
 *
 * - ark, an archive manager
 * - kcalc, a scientific calculator
@@ -9,5 +12,13 @@
 * - khexedit, a binary file editor
 * - ktimer, a countdown launcher
 * - kwalletmanager, the KWallet manager
+*
+* From kdegraphics:
+*
+* - kruler, a screen ruler
+* - ksnapshot, a screen capture program
+* - kview, an image viewer; <b>kimageviewer</b> (kview/kimageviewer):
+*   KImageViewer::Viewer and KImageViewer::Canvas, the interfaces of
+*   the KView parts.
 *
 */
