@@ -1367,17 +1367,21 @@ void PageView::contentsMouseDoubleClickEvent( QMouseEvent * e )
     const KPDFTextPage * tp = d->document->page( page )->textPage();
     if ( !tp || !tp->length() )
         return;
+    // words end at white space and at direction marks (which poppler puts
+    // between right to left words)
     const QString & text = tp->text();
+#define KPDF_WORD_END( c ) ( (c).isSpace() || (c).category() == QChar::Other_Format )
     uint i = QMIN( pos, tp->length() - 1 );
-    if ( text[i].isSpace() && i > 0 )
+    if ( KPDF_WORD_END( text[i] ) && i > 0 )
         --i;
-    if ( text[i].isSpace() )
+    if ( KPDF_WORD_END( text[i] ) )
         return;
     uint from = i, to = i + 1;
-    while ( from > 0 && !text[from - 1].isSpace() )
+    while ( from > 0 && !KPDF_WORD_END( text[from - 1] ) )
         --from;
-    while ( to < tp->length() && !text[to].isSpace() )
+    while ( to < tp->length() && !KPDF_WORD_END( text[to] ) )
         ++to;
+#undef KPDF_WORD_END
     d->textSelecting = false;
     setTextSelection( page, from, page, to );
     if ( d->document->isAllowed( KPDFDocument::AllowCopy ) )
