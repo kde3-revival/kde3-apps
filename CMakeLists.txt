@@ -23,6 +23,7 @@ option(KDE3_APPS_KWALLET     "Build KWalletManager, the KWallet manager" ON)
 option(KDE3_APPS_KVIEW       "Build KView, the image viewer and its KParts" ON)
 option(KDE3_APPS_KRULER      "Build KRuler, the screen ruler" ON)
 option(KDE3_APPS_KSNAPSHOT   "Build KSnapshot, the screen capture program" ON)
+option(KDE3_APPS_KWEATHER    "Build KWeather, the weather applet of the panel (Open-Meteo)" ON)
 
 # kdelibs: the CMake package, install prefix, compiler settings, RUNPATH
 include(cmake/KDELibs.cmake)
@@ -38,7 +39,9 @@ include_directories("${PROJECT_BINARY_DIR}")
 # from kdeutils
 foreach(_app ark kcalc kcharselect kdf ktimer kwallet khexedit
         # from kdegraphics
-        kview kruler ksnapshot)
+        kview kruler ksnapshot
+        # from kdetoys
+        kweather)
   string(TOUPPER "${_app}" _APP)
   if(KDE3_APPS_${_APP})
     add_subdirectory(${_app})

@@ -4,7 +4,9 @@
 # from kdeutils
 foreach(_app ark kcalc kcharselect kdf khexedit ktimer kwallet
         # from kdegraphics
-        kruler ksnapshot kview)
+        kruler ksnapshot kview
+        # from kdetoys
+        kweather)
   string(TOUPPER "${_app}" _APP)
   if(KDE3_APPS_${_APP})
     add_subdirectory(${_app})
