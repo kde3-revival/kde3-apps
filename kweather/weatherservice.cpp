@@ -221,6 +221,11 @@ QStringList WeatherService::dailyValues(const QString &stationID)
 	return m_weatherLib->dailyValues(stationID);
 }
 
+QStringList WeatherService::dayHours(const QString &stationID, const QString &date)
+{
+	return m_weatherLib->dayHours(stationID, date);
+}
+
 QString WeatherService::currentTime(const QString &stationID)
 {
 	return m_weatherLib->currentTime(stationID);

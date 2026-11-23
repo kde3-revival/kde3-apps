@@ -106,6 +106,8 @@ struct Hour
     double temp;
     double precip;      // in the hour that ends at time
     double prob;        // precipitation probability, % (noValue: unknown)
+    double windSpeed;
+    double windDirection;   // where it comes from, degrees
     int code;
     bool day;
 };
@@ -171,6 +173,8 @@ bool parseHours(const QVariant &root, QValueList<Hour> *hours)
     QValueList<QVariant> prob = array(hourly, "precipitation_probability");
     QValueList<QVariant> code = array(hourly, "weather_code");
     QValueList<QVariant> day = array(hourly, "is_day");
+    QValueList<QVariant> windSpeed = array(hourly, "wind_speed_10m");
+    QValueList<QVariant> windDirection = array(hourly, "wind_direction_10m");
     hours->clear();
     long last = 0;
     for (uint i = 0; i < time.count(); ++i) {
@@ -185,6 +189,8 @@ bool parseHours(const QVariant &root, QValueList<Hour> *hours)
         h.prob = number(at(prob, i), 0, 100);
         h.code = codeOf(at(code, i));
         h.day = number(at(day, i), 0, 1) != 0;
+        h.windSpeed = number(at(windSpeed, i), 0, windHi);
+        h.windDirection = number(at(windDirection, i), 0, 360);
         hours->append(h);
     }
     return !hours->isEmpty();
@@ -321,6 +327,10 @@ public:
     WeatherLib::Units currentUnits;
     QValueList<Hour> hours;
     WeatherLib::Units hourUnits;
+    // the hybrid model: the hours of the ECMWF model, for the days after
+    // the end of ICON-EU
+    QValueList<Hour> laterHours;
+    WeatherLib::Units laterUnits;
     QValueList<Day> days;
     WeatherLib::Units dayUnits;
 
@@ -408,21 +418,21 @@ void WeatherLib::getData(Data *d, bool force)
 		// ICON-EU (7 km, every 3 h) for now and the next hours, the
 		// ECMWF IFS HRES (9 km) for the days
 		startJob(d, "icon_eu", true, true, false);
-		startJob(d, "ecmwf_ifs", false, false, true);
+		startJob(d, "ecmwf_ifs", false, true, true, true);
 	} else {
 		startJob(d, d->model, true, true, true);
 	}
 }
 
 void WeatherLib::startJob(Data *d, const QString &model, bool current,
-                          bool hourly, bool daily)
+                          bool hourly, bool daily, bool later)
 {
 	QLocale c = QLocale::c();
 	KURL url(m_server);
 	QString query = QString::fromLatin1("latitude=") + c.toString(d->latitude, 'f', 4)
 	              + QString::fromLatin1("&longitude=") + c.toString(d->longitude, 'f', 4)
 	              + QString::fromLatin1("&models=") + model
-	              + QString::fromLatin1("&timezone=auto&timeformat=unixtime&forecast_days=7");
+	              + QString::fromLatin1("&timezone=auto&timeformat=unixtime&forecast_days=16");
 	if (m_units.temperature == "fahrenheit")
 		query += QString::fromLatin1("&temperature_unit=fahrenheit");
 	if (m_units.wind != "kmh")
@@ -435,7 +445,7 @@ void WeatherLib::startJob(Data *d, const QString &model, bool current,
 			"pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m");
 	if (hourly)
 		query += QString::fromLatin1("&hourly=temperature_2m,precipitation_probability,"
-			"precipitation,weather_code,is_day");
+			"precipitation,weather_code,is_day,wind_speed_10m,wind_direction_10m");
 	if (daily)
 		query += QString::fromLatin1("&daily=weather_code,temperature_2m_max,"
 			"temperature_2m_min,precipitation_sum,precipitation_probability_max,"
@@ -450,6 +460,7 @@ void WeatherLib::startJob(Data *d, const QString &model, bool current,
 	r.current = current;
 	r.hourly = hourly;
 	r.daily = daily;
+	r.later = later;
 	r.units = m_units;
 	m_jobs.insert(download, r);
 	++d->pending;
@@ -497,7 +508,10 @@ void WeatherLib::slotDownloadDone(Download *download, const QByteArray &answer,
 				d->currentUnits = r.units;
 				d->hasCurrent = true;
 			}
-			if (r.hourly) {
+			if (r.hourly && r.later) {
+				d->laterHours = hours;
+				d->laterUnits = r.units;
+			} else if (r.hourly) {
 				d->hours = hours;
 				d->hourUnits = r.units;
 			}
@@ -790,6 +804,66 @@ QStringList WeatherLib::dailyValues(const QString &id)
 		            + cNumber(dy.precip, 2) + '\t' + cNumber(dy.prob, 0) + '\t'
 		            + WeatherIcons::description(dy.code) + '\t'
 		            + temperatureUnit(d->dayUnits) + '\t' + precipitationUnit(d->dayUnits));
+	}
+	return list;
+}
+
+namespace
+{
+
+QString windUnit(const WeatherLib::Units &u)
+{
+    if (u.wind == "ms")
+        return i18n("m/s");
+    if (u.wind == "mph")
+        return i18n("mph");
+    if (u.wind == "kn")
+        return i18n("kt");
+    return i18n("km/h");
+}
+
+}
+
+QStringList WeatherLib::dayHours(const QString &id, const QString &date)
+{
+	QStringList list;
+	Data *d = findData(id);
+	if (!d)
+		return list;
+	long t = now();
+	QDate wanted = QDate::fromString(date, Qt::ISODate);
+	// today (or no date): the next 24 hours, by time, not by count
+	bool next24 = !wanted.isValid() || wanted == d->local(t).date();
+
+	// by time: the hours of the model first; with the hybrid model, those
+	// of the ECMWF fill the hours ICON-EU does not have (after its end,
+	// and where it had no value)
+	QMap<long, const Hour*> hours;
+	QMap<long, const WeatherLib::Units*> units;
+	for (int part = 1; part >= 0; --part) {
+		const QValueList<Hour> &source = part == 0 ? d->hours : d->laterHours;
+		const WeatherLib::Units *u = part == 0 ? &d->hourUnits : &d->laterUnits;
+		QValueList<Hour>::ConstIterator it = source.begin();
+		for (; it != source.end(); ++it) {
+			const Hour &h = *it;
+			if (next24 ? (h.time <= t || h.time > t + 24 * 3600)
+			           : d->local(h.time).date() != wanted)
+				continue;
+			hours[h.time] = &h;     // the model of the first part wins
+			units[h.time] = u;
+		}
+	}
+	QMap<long, const Hour*>::ConstIterator it = hours.begin();
+	for (; it != hours.end(); ++it) {
+		const Hour &h = **it;
+		const WeatherLib::Units &u = *units[it.key()];
+		list.append(d->local(h.time).toString(Qt::ISODate) + '\t'
+		            + WeatherIcons::iconName(h.code, h.day) + '\t'
+		            + cNumber(h.temp, 1) + '\t' + cNumber(h.precip, 2) + '\t'
+		            + cNumber(h.prob, 0) + '\t' + WeatherIcons::description(h.code) + '\t'
+		            + cNumber(h.windSpeed, 0) + '\t' + cNumber(h.windDirection, 0) + '\t'
+		            + temperatureUnit(u) + '\t' + precipitationUnit(u) + '\t' + windUnit(u)
+		            + '\t' + QString::number(h.time));
 	}
 	return list;
 }

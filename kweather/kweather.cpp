@@ -213,7 +213,8 @@ void kweather::doReport()
         return;
 
     kdDebug(12004) << "Showing the forecast" << endl;
-    mPopup = new ForecastPopup( mWeatherService, reportLocation, this );
+    mPopup = new ForecastPopup( mWeatherService, reportLocation,
+                                orientation() == Horizontal, this );
     connect( mPopup, SIGNAL( hidden() ), SLOT( slotPopupHidden() ) );
     mPopup->popup( QRect( mapToGlobal( QPoint( 0, 0 ) ), size() ), popupDirection() );
 }

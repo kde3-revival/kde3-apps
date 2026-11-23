@@ -8,6 +8,7 @@ kde3_add_module(weather_panelapplet
     dockwidget.cpp
     weatherbutton.cpp
     forecastpopup.cpp
+    forecastchart.cpp
     weathericons.cpp
     weatherIface.skel
     weatherservice.stub
@@ -16,6 +17,7 @@ kde3_add_module(weather_panelapplet
     dockwidget.h
     weatherbutton.h
     forecastpopup.h
+    forecastchart.h
   LINK
     KDE3::kutils
 )
