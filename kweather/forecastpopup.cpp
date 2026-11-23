@@ -180,11 +180,33 @@ QWidget *separator(QWidget *parent)
 ForecastPopup::ForecastPopup(WeatherService_stub *service,
                              const QString &location, QWidget *parent,
                              const char *name)
-    : QFrame(parent, name, WType_Popup)
+    : QFrame(parent, name, WType_Popup), m_content(0)
 {
     setFrameStyle(QFrame::PopupPanel | QFrame::Raised);
     setLineWidth(1);
     setMargin(0);
+    new QVBoxLayout(this, frameWidth(), 0);
+
+    // everything if it fits the work area of the screen, else less, step
+    // by step (see build())
+    QDesktopWidget *desktop = QApplication::desktop();
+    int height = desktop->availableGeometry(desktop->screenNumber(parent)).height();
+    for (int level = 0; ; ++level) {
+        build(service, location, level);
+        if (sizeHint().height() <= height || level >= maxLevel)
+            break;
+    }
+}
+
+/** The contents; from level 1 on, the more compact: a smaller current
+    weather (1), 5 days (2), 3 days (3), smaller icons (4), no details (5). */
+void ForecastPopup::build(WeatherService_stub *service, const QString &location,
+                          int level)
+{
+    delete m_content;
+    m_content = new QWidget(this);
+    QWidget *w = m_content;
+    layout()->add(w);
 
     const int margin = KDialog::marginHint();
     const int spacing = KDialog::spacingHint();
@@ -193,7 +215,7 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
     const int left = Qt::AlignAuto | Qt::AlignVCenter;
     KLocale *loc = KGlobal::locale();
 
-    QVBoxLayout *top = new QVBoxLayout(this, margin, spacing);
+    QVBoxLayout *top = new QVBoxLayout(w, margin, spacing);
 
     // the width: that of 12 equal columns of the hours
     QFontMetrics fm(font());
@@ -203,52 +225,61 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
     // at least 36 average characters: room for the details row
     column = QMAX(column, (36 * fm.width(QChar('x')) + 11) / 12);
     // 12 hours, or fewer on a narrow screen or with a large font
-    QRect screen = QApplication::desktop()->screenGeometry(parent);
+    QRect screen = QApplication::desktop()->screenGeometry(parentWidget());
     int hourColumns = (screen.width() - 2 * margin - 2 * frameWidth() - 16) / column;
     hourColumns = QMAX(4, QMIN(12, hourColumns));
     setFixedWidth(QMIN(hourColumns * column + 2 * margin + 2 * frameWidth(), screen.width()));
     // the day bars: 3 columns at full width, less when the popup is narrower
     const int barWidth = column * QMAX(1, QMIN(3, hourColumns - 9));
 
+    // smaller, and fewer, when the screen is too short for everything
+    const bool compact = level >= 1;
+    const int maxDays = level >= 3 ? 3 : level >= 2 ? 5 : 7;
+    const int smallIcons = level >= 4;
+    const int hourIconSize = smallIcons ? 22 : hourIcon;
+    const int dayIconSize = smallIcons ? 22 : dayIcon;
+    const bool withDetails = level < 5;
+
     // the place, and when the data is from
     QHBoxLayout *header = new QHBoxLayout(top, spacing);
     QString place = service->stationName(location);
     QString country = service->stationCountry(location);
-    header->addWidget(label(this, country.isEmpty() ? place
+    header->addWidget(label(w, country.isEmpty() ? place
                             : i18n("place, country", "%1, %2").arg(place).arg(country),
                             left, 1.2, true));
     header->addStretch();
     QDateTime updated = QDateTime::fromString(service->currentTime(location), Qt::ISODate);
     if (updated.isValid())
-        header->addWidget(label(this, i18n("Updated %1").arg(loc->formatTime(updated.time())),
+        header->addWidget(label(w, i18n("Updated %1").arg(loc->formatTime(updated.time())),
                                 right | Qt::AlignBottom, 0.85, false, true));
-    top->addWidget(separator(this));
+    top->addWidget(separator(w));
 
     QString error = service->error(location);
     QString temperature = service->temperature(location);
     if (temperature.isEmpty()) {
         QLabel *l = new QLabel(error.isEmpty() ? i18n("Waiting for the weather data...")
-                               : i18n("The weather could not be fetched: %1").arg(error), this);
+                               : i18n("The weather could not be fetched: %1").arg(error), w);
         l->setAlignment(Qt::AlignCenter | Qt::WordBreak);
         l->setMinimumHeight(4 * fm.height());
         top->addWidget(l);
     } else {
         // now: the icon, the temperature, the sky and how it feels
         QHBoxLayout *now = new QHBoxLayout(top, 2 * spacing);
-        now->addWidget(iconLabel(this, service->currentIconString(location), nowIcon, QString::null));
-        now->addWidget(label(this, temperature, left, 2.4, true));
+        now->addWidget(iconLabel(w, service->currentIconString(location),
+                                     compact ? 32 : nowIcon, QString::null));
+        now->addWidget(label(w, temperature, left, compact ? 1.6 : 2.4, true));
         QVBoxLayout *sky = new QVBoxLayout(now, 0);
         sky->addStretch();
-        sky->addWidget(label(this, service->weather(location).join(QString::fromLatin1(", ")),
-                             left, 1.15));
+        sky->addWidget(label(w, service->weather(location).join(QString::fromLatin1(", ")),
+                             left, compact ? 1.0 : 1.15));
         QString apparent = service->apparentTemperature(location);
         if (!apparent.isEmpty())
-            sky->addWidget(label(this, i18n("Feels like %1").arg(apparent), left, 1.0, false, true));
+            sky->addWidget(label(w, i18n("Feels like %1").arg(apparent), left, 1.0, false, true));
         sky->addStretch();
         now->addStretch();
 
         // the details: label above value, in columns
-        QHBoxLayout *details = new QHBoxLayout(top, 3 * spacing);
+        QHBoxLayout *details = withDetails ? new QHBoxLayout(top, 3 * spacing) : 0;
         const char *names[] = { I18N_NOOP("Wind"), I18N_NOOP("Humidity"), I18N_NOOP("Pressure"),
                                 I18N_NOOP("Next hour"), I18N_NOOP("Sun") };
         // "no rain" only when the next hours have amounts: unknown is not dry
@@ -272,63 +303,67 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
             rise.isEmpty() || set.isEmpty() ? QString::null
                 : i18n("sunrise - sunset", "%1 \xe2\x80\x93 %2").arg(rise).arg(set)
         };
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; details && i < 5; ++i) {
             if (values[i].isEmpty())
                 continue;
             QVBoxLayout *pair = new QVBoxLayout(details, 0);
-            pair->addWidget(label(this, i18n(names[i]), left, 0.85, false, true));
-            pair->addWidget(label(this, values[i], left));
+            pair->addWidget(label(w, i18n(names[i]), left, 0.85, false, true));
+            pair->addWidget(label(w, values[i], left));
         }
-        details->addStretch();
-        top->addWidget(separator(this));
+        if (details) {
+            details->addStretch();
+            top->addWidget(separator(w));
+        }
 
         // the next 12 hours: equal columns
         QStringList hours = service->hourlyValues(location, hourColumns);
         if (!hours.isEmpty()) {
             QStringList first = QStringList::split(QChar('\t'), hours.first(), true);
-            QLabel *caption = label(this, i18n("Next hours"), left, 1.0, true);
+            QLabel *caption = label(w, i18n("Next hours"), left, 1.0, true);
             QHBoxLayout *ch = new QHBoxLayout(top, spacing);
             ch->addWidget(caption);
-            ch->addWidget(label(this, i18n("units of temperature and precipitation", "%1, %2")
+            ch->addWidget(label(w, i18n("units of temperature and precipitation", "%1, %2")
                                     .arg(field(first, 6)).arg(field(first, 7)),
                                 left, 0.85, false, true));
             ch->addStretch();
             QGridLayout *grid = new QGridLayout(top, 4, hourColumns, 0);
-            grid->setRowSpacing(1, hourIcon + 4);
+            grid->setRowSpacing(1, hourIconSize + 4);
             int c = 0;
             for (QStringList::ConstIterator it = hours.begin(); it != hours.end() && c < hourColumns; ++it, ++c) {
                 QStringList f = QStringList::split(QChar('\t'), *it, true);
                 bool ok;
                 QDateTime t = QDateTime::fromString(field(f, 0), Qt::ISODate);
-                grid->addWidget(label(this, loc->formatTime(t.time()), center, 0.9, false, true), 0, c);
-                grid->addWidget(iconLabel(this, field(f, 1), hourIcon, field(f, 5)), 1, c, Qt::AlignCenter);
+                grid->addWidget(label(w, loc->formatTime(t.time()), center, 0.9, false, true), 0, c);
+                grid->addWidget(iconLabel(w, field(f, 1), hourIconSize, field(f, 5)), 1, c, Qt::AlignCenter);
                 double temp = value(f, 2, &ok);
-                grid->addWidget(label(this, ok ? degrees(temp) : QString::null, center, 1.0, true), 2, c);
+                grid->addWidget(label(w, ok ? degrees(temp) : QString::null, center, 1.0, true), 2, c);
                 double p = value(f, 3, &ok);
                 QString text = ok ? amount(p, field(f, 7)) : QString::null;
                 QLabel *r;
                 if (!text.isEmpty()) {
-                    r = label(this, text, center, 0.85);
-                    r->setPaletteForegroundColor(rainColor(this));
+                    r = label(w, text, center, 0.85);
+                    r->setPaletteForegroundColor(rainColor(w));
                 } else {
                     double prob = value(f, 4, &ok);
-                    r = label(this, ok && prob >= 10 ? i18n("%1 %").arg(long(prob)) : QString::null,
+                    r = label(w, ok && prob >= 10 ? i18n("%1 %").arg(long(prob)) : QString::null,
                               center, 0.85, false, true);
                 }
                 grid->addWidget(r, 3, c);
                 grid->setColStretch(c, 1);
                 grid->addColSpacing(c, column);
             }
-            top->addWidget(separator(this));
+            top->addWidget(separator(w));
         }
 
         // the next days: rows in columns, the temperatures within the week's
         QStringList days = service->dailyValues(location);
+        while (int(days.count()) > maxDays)
+            days.remove(days.fromLast());
         if (!days.isEmpty()) {
             QStringList first = QStringList::split(QChar('\t'), days.first(), true);
             QHBoxLayout *ch = new QHBoxLayout(top, spacing);
-            ch->addWidget(label(this, i18n("Next 7 days"), left, 1.0, true));
-            ch->addWidget(label(this, i18n("units of temperature and precipitation", "%1, %2")
+            ch->addWidget(label(w, i18n("Next day", "Next %n days", days.count()), left, 1.0, true));
+            ch->addWidget(label(w, i18n("units of temperature and precipitation", "%1, %2")
                                     .arg(field(first, 7)).arg(field(first, 8)),
                                 left, 0.85, false, true));
             ch->addStretch();
@@ -353,52 +388,55 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
             if (!today.isValid())
                 today = QDate::currentDate();
             int row = 0;
-            for (QStringList::ConstIterator it = days.begin(); it != days.end() && row < 7; ++it, ++row) {
+            for (QStringList::ConstIterator it = days.begin(); it != days.end(); ++it, ++row) {
                 QStringList f = QStringList::split(QChar('\t'), *it, true);
                 QDate date = QDate::fromString(field(f, 0), Qt::ISODate);
                 QString day = date == today ? i18n("Today")
                             : date == today.addDays(1) ? i18n("Tomorrow")
                             : loc->calendar()->weekDayName(date, false);
-                grid->addWidget(label(this, day, left), row, 0);
-                grid->addWidget(iconLabel(this, field(f, 1), dayIcon, field(f, 6)), row, 1, Qt::AlignCenter);
+                grid->addWidget(label(w, day, left), row, 0);
+                grid->addWidget(iconLabel(w, field(f, 1), dayIconSize, field(f, 6)), row, 1, Qt::AlignCenter);
                 bool okHi, okLo, ok;
                 double hi = value(f, 2, &okHi), lo = value(f, 3, &okLo);
-                grid->addWidget(label(this, okLo ? degrees(lo) : QString::null, right, 1.0, false, true), row, 3);
+                grid->addWidget(label(w, okLo ? degrees(lo) : QString::null, right, 1.0, false, true), row, 3);
                 if (okHi && okLo) {
-                    RangeBar *bar = new RangeBar(this, weekMin, weekMax, lo, hi);
+                    RangeBar *bar = new RangeBar(w, weekMin, weekMax, lo, hi);
                     bar->setFixedWidth(barWidth);
                     grid->addWidget(bar, row, 4, Qt::AlignCenter);
                 }
-                grid->addWidget(label(this, okHi ? degrees(hi) : QString::null, right, 1.0, true), row, 5);
+                grid->addWidget(label(w, okHi ? degrees(hi) : QString::null, right, 1.0, true), row, 5);
                 double p = value(f, 4, &ok);
                 QString text = ok ? amount(p, field(f, 8)) : QString::null;
-                QLabel *r = label(this, text, right);
-                r->setPaletteForegroundColor(rainColor(this));
+                QLabel *r = label(w, text, right);
+                r->setPaletteForegroundColor(rainColor(w));
                 grid->addWidget(r, row, 6);
                 double prob = value(f, 5, &ok);
-                grid->addWidget(label(this, ok && !text.isEmpty() ? i18n("%1 %").arg(long(prob))
+                grid->addWidget(label(w, ok && !text.isEmpty() ? i18n("%1 %").arg(long(prob))
                                                                   : QString::null,
                                       right, 0.85, false, true), row, 7);
             }
             grid->addColSpacing(0, fm.width(i18n("Wednesday")) + 2 * spacing);
-            grid->addColSpacing(1, dayIcon + 2 * spacing);
+            grid->addColSpacing(1, dayIconSize + 2 * spacing);
             grid->addColSpacing(3, degreesWidth + spacing);
             grid->addColSpacing(4, barWidth + 2 * spacing);
             grid->addColSpacing(5, degreesWidth + spacing);
             grid->addColSpacing(6, fm.width(loc->formatNumber(88.8, 1)) + 3 * spacing);
             grid->addColSpacing(7, fm.width(QString::fromLatin1("100 %")) + 2 * spacing);
-            top->addWidget(separator(this));
+            top->addWidget(separator(w));
         }
         if (!error.isEmpty()) {
-            QLabel *l = new QLabel(i18n("The last update failed: %1").arg(error), this);
+            QLabel *l = new QLabel(i18n("The last update failed: %1").arg(error), w);
             l->setAlignment(Qt::WordBreak);
             top->addWidget(l);
         }
     }
 
-    top->addWidget(label(this, i18n("%1 \xc2\xb7 Weather data by Open-Meteo.com")
+    top->addWidget(label(w, i18n("%1 \xc2\xb7 Weather data by Open-Meteo.com")
                                    .arg(service->modelName(location)),
                          left, 0.8, false, true));
+
+    w->show();
+    layout()->activate();
 }
 
 void ForecastPopup::popup(const QRect &anchor, int direction)

@@ -37,6 +37,12 @@ signals:
 protected:
     void hideEvent(QHideEvent *e);
     void keyPressEvent(QKeyEvent *e);
+
+private:
+    enum { maxLevel = 5 };
+    void build(WeatherService_stub *service, const QString &location, int level);
+
+    QWidget *m_content;
 };
 
 #endif
