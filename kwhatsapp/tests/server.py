@@ -24,6 +24,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Cache-Control', 'no-store')
             self.end_headers()
             return
+        if url.path == '/redirect':
+            # a redirect to the page in ?to=
+            self.send_response(302)
+            self.send_header('Location', urllib.parse.parse_qs(url.query)['to'][0])
+            self.end_headers()
+            return
         if url.path == '/download/attachment':
             body = bytes(i % 251 for i in range(100000))
             self.send_response(200)

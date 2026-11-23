@@ -8,7 +8,7 @@ cmake -G Ninja -S /src/wpe -B /build/wpe -DCMAKE_PREFIX_PATH=/opt/kde3 -DCMAKE_I
 ninja -C /build/wpe > /build/wpe-build.log 2>&1 || { cat /build/wpe-build.log; exit 1; }
 DESTDIR=/build/inst ninja -C /build/wpe install > /dev/null
 off=
-for a in ARK KCALC KCHARSELECT KDF KHEXEDIT KTIMER KWALLET KVIEW KRULER KSNAPSHOT; do off="$off -DKDE3_APPS_$a=OFF"; done
+for a in ARK KCALC KCHARSELECT KDF KHEXEDIT KTIMER KWALLET KVIEW KRULER KSNAPSHOT KWEATHER KPDF; do off="$off -DKDE3_APPS_$a=OFF"; done
 cmake -G Ninja -S /src/apps -B /build/apps -DCMAKE_PREFIX_PATH=/opt/kde3 -DCMAKE_BUILD_TYPE=RelWithDebInfo $off \
       > /build/apps-cmake.log
 ninja -C /build/apps > /build/apps-build.log 2>&1 || { cat /build/apps-build.log; exit 1; }

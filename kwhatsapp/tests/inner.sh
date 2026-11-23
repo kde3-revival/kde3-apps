@@ -287,6 +287,32 @@ EOC
   click 370 55
   check notification-no-content $O/knotify.log ': New message$' 10
   grep -q Alice $O/knotify.log && fail notification-no-content-hidden "sender shown" || ok notification-no-content-hidden
+
+  # another site without a link the user followed: never in the window
+  confined() {   # confined STEP: no other site in the app, the page is the app's
+    sleep 3
+    if grep -q 'other site loaded IN THE APP' $O/page.log; then fail "$1" "another site was shown"
+    elif ! xprop -id "$W" WM_NAME | grep -q 'WhatsApp'; then fail "$1" "$(xprop -id $W WM_NAME)"
+    else ok "$1"; fi
+  }
+  click 1110 55; confined confined-location-replace
+  click 1110 155; confined confined-form-post
+  click 1110 255; confined confined-redirect
+  click 1110 355; confined confined-data-url
+  click 1110 455; check refresh-page-loaded $O/page.log '^page3 loaded' 10; confined confined-meta-refresh
+  check confinement-reported $O/kwhatsapp-$RUN.log 'is not one of the application' 2
+  quit_app
+
+  # a hand-edited permissions file: canonicalized, a denial wins
+  printf '[Notifications]\nAllowed=http://localhost:8080/,http://localhost:8080,garbage\nDenied=HTTP://LOCALHOST:8080\n' \
+    > $KDEHOME/share/apps/kwhatsapp/webkit/kwpepart-permissions
+  RUN=3
+  start_app --url http://localhost:8080/app.html || return
+  # (WebKit reports an origin denied at start as "default")
+  check permissions-not-granted $O/page.log '^load visit=4 .*permission=(denied|default)' 20
+  check permissions-query-not-granted $O/page.log '^query (denied|prompt)' 10
+  click 130 55
+  check permissions-denial-wins $O/page.log '^permission denied' 10
   quit_app
 }
 

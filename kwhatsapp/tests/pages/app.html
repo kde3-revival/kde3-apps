@@ -26,6 +26,14 @@
 <button class="b" id="blob" style="left:260px;top:220px">blob download</button>
 <input class="b" id="file" type="file" style="left:500px;top:220px">
 <button class="b" id="mic" style="left:740px;top:220px">microphone</button>
+<!-- ways to another site without a link the user follows: none may
+     show it in the application -->
+<button class="b" id="replace" style="left:1000px;top:20px">location.replace</button>
+<form method="post" action="http://127.0.0.1:8081/other.html" style="margin:0">
+<button class="b" id="form" type="submit" style="left:1000px;top:120px">form post</button></form>
+<a class="b" id="redirect" href="/redirect?to=http://127.0.0.1:8081/other.html" style="left:1000px;top:220px">redirect</a>
+<button class="b" id="datanav" style="left:1000px;top:320px">data: URL</button>
+<a class="b" id="refresh" href="/page3.html" style="left:1000px;top:420px">meta refresh</a>
 <div id="drop">drop files here</div>
 <pre id="out"></pre>
 <script>
@@ -65,6 +73,14 @@ document.getElementById('notify').onclick = function() {
   n.onshow = function() { log('notification shown'); };
   n.onclick = function() { log('notification click'); };
   n.onerror = function() { log('notification error'); };
+};
+document.getElementById('replace').onclick = function() {
+  setTimeout(function() { location.replace('http://127.0.0.1:8081/other.html'); }, 1500);
+  log('replace armed');
+};
+document.getElementById('datanav').onclick = function() {
+  setTimeout(function() { location.href = 'data:text/html,<title>DATA</title>DATA'; }, 1500);
+  log('data armed');
 };
 document.getElementById('unread').onclick = function() { document.title = '(3) WhatsApp'; log('title ' + document.title); };
 document.getElementById('read').onclick = function() { document.title = 'WhatsApp'; log('title ' + document.title); };
