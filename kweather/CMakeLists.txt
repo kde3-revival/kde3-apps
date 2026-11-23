@@ -57,6 +57,29 @@ kde3_add_executable(kweatherservice
     KDE3::kio
 )
 
+# The DCOP files are made by one target that the others wait for.  With
+# the Makefile generators a custom command whose outputs are sources of
+# several targets runs once in each of them (CMake documents this), so a
+# parallel build ran dcopidl on weatherservice.h three times at once and
+# the runs raced on weatherservice.kidl.  The macros of newer kdelibs do
+# this themselves (_kde3_generated_by_one_target); a second target for the same
+# commands would race with theirs, so only for older ones.
+if(NOT COMMAND _kde3_generated_by_one_target)
+  set(_bin "${CMAKE_CURRENT_BINARY_DIR}")
+  add_custom_target(kweather_dcop
+    DEPENDS
+      "${_bin}/weatherservice.kidl"
+      "${_bin}/weatherservice_stub.h"
+      "${_bin}/weatherservice_stub.cpp"
+      "${_bin}/weatherservice_skel.cpp"
+      "${_bin}/weatherIface.kidl"
+      "${_bin}/weatherIface_skel.cpp"
+  )
+  foreach(_target weather_panelapplet kcm_weather kweatherservice)
+    add_dependencies(${_target} kweather_dcop)
+  endforeach()
+endif()
+
 kde3_install_icons(kweather)
 
 install(FILES kweather.desktop DESTINATION ${KDE3_DATA_INSTALL_DIR}/kicker/applets)
