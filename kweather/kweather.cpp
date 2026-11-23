@@ -220,7 +220,9 @@ void kweather::doReport()
 
 void kweather::slotPopupHidden()
 {
-    // WDestructiveClose deletes it
+    // hidden by a close() or by Qt's popup handling, which only hides
+    if ( mPopup )
+        mPopup->deleteLater();
     mPopup = 0;
     mPopupHidden.start();
 }
@@ -374,8 +376,13 @@ void kweather::slotPrefsAccepted()
 {
     // Preferences have been saved in the config file by the KCModule,
     // so read them out.
+    QString oldLocation = reportLocation;
+    bool oldAlert = mRainAlert;
     loadPrefs();
-    mRainExpected = false;
+    // another place, or the alert just switched on: tell about rain that
+    // is already expected; other settings keep the rain spell
+    if ( reportLocation != oldLocation || ( mRainAlert && !oldAlert ) )
+        mRainExpected = false;
     delete mContextMenu;    // its title names the place
     initContextMenu();
 

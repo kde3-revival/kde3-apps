@@ -26,7 +26,8 @@ public:
     ForecastPopup(WeatherService_stub *service, const QString &location,
                   QWidget *parent = 0, const char *name = 0);
 
-    /** Shows the popup next to @p anchor (global), on the side @p direction
+    /** Shows the popup (hidden() is emitted when it goes; the owner
+        deletes it then) next to @p anchor (global), on the side @p direction
         (KPanelApplet::Direction) and inside the screen of @p anchor. */
     void popup(const QRect &anchor, int direction);
 

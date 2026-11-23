@@ -68,7 +68,7 @@ QString escape(const QString &s)
 ForecastPopup::ForecastPopup(WeatherService_stub *service,
                              const QString &location, QWidget *parent,
                              const char *name)
-    : QFrame(parent, name, WType_Popup | WDestructiveClose)
+    : QFrame(parent, name, WType_Popup)
 {
     setFrameStyle(QFrame::PopupPanel | QFrame::Raised);
     setLineWidth(1);
@@ -165,7 +165,10 @@ ForecastPopup::ForecastPopup(WeatherService_stub *service,
             QGridLayout *grid = new QGridLayout(top, days.count(), 6, KDialog::spacingHint());
             grid->setColStretch(5, 1);
             int row = 0;
-            QDate today = QDate::currentDate();
+            // today at the location, not here
+            QDate today = QDate::fromString(service->localDate(location), Qt::ISODate);
+            if (!today.isValid())
+                today = QDate::currentDate();
             for (QStringList::ConstIterator it = days.begin(); it != days.end(); ++it, ++row) {
                 QStringList f = QStringList::split(QChar('\t'), *it, true);
                 QDate date = QDate::fromString(field(f, 0), Qt::ISODate);
