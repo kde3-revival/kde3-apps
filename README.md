@@ -56,6 +56,7 @@ Dependencies:
   (`/opt/kde3`), the compiler flags and the RUNPATH
 - X11 with libXext (KSnapshot uses the X Shape extension)
 - GMP (KCalc)
+- poppler-glib 20.09 or newer and cairo with its PostScript surface (KPDF)
 
 At run time Ark calls the command line archivers it finds (tar, gzip,
 bzip2, xz, zstd, lz4, zip/unzip, 7z/7zz, rar/unrar, lha, ...), and KDiskFree
@@ -82,6 +83,7 @@ Options (all `ON` by default):
 | `KDE3_APPS_KVIEW`            | KView                                                     |
 | `KDE3_APPS_KRULER`           | KRuler                                                    |
 | `KDE3_APPS_KSNAPSHOT`        | KSnapshot                                                 |
+| `KDE3_APPS_KPDF`             | KPDF (needs poppler-glib and cairo); `KDE3_APPS_KPDF_FORCE_DRM` (`OFF` by default) removes the setting that ignores the copy and print restrictions of PDF files |
 | `KDE3_APPS_KSNAPSHOT_XSHAPE` | KSnapshot cuts non-rectangular windows to their shape (X Shape extension; the configuration stops if it is missing) |
 
 The handbook of an application is built with it.  To build a single
@@ -90,7 +92,8 @@ application, switch the others off, for example KCalc only:
     cmake -S . -B build-kcalc -G Ninja -DCMAKE_PREFIX_PATH=/opt/kde3 \
           -DKDE3_APPS_ARK=OFF -DKDE3_APPS_KCHARSELECT=OFF -DKDE3_APPS_KDF=OFF \
           -DKDE3_APPS_KHEXEDIT=OFF -DKDE3_APPS_KTIMER=OFF -DKDE3_APPS_KWALLET=OFF \
-          -DKDE3_APPS_KVIEW=OFF -DKDE3_APPS_KRULER=OFF -DKDE3_APPS_KSNAPSHOT=OFF
+          -DKDE3_APPS_KVIEW=OFF -DKDE3_APPS_KRULER=OFF -DKDE3_APPS_KSNAPSHOT=OFF \
+          -DKDE3_APPS_KPDF=OFF
 
 ## Other kde3-revival repositories
 
@@ -116,7 +119,9 @@ As stated in the source files:
 
 - The applications are under the GNU General Public License (GPL), version 2
   or (at your option) any later version: Ark, KCalc, KDiskFree, KHexEdit,
-  KTimer, KWalletManager, KRuler.  Most files of KView say GPL version 2
+  KTimer, KWalletManager, KRuler, KPDF.  KPDF links to poppler, whose
+  code from xpdf is under the GPL version 2 or 3; xpdf itself is no
+  longer part of KPDF.  Most files of KView say GPL version 2
   only; a few in `kview/kviewviewer/` say version 2 or later.  KCharSelect
   and some single files have no licence header; their About dialogs say GPL.
 - KSnapshot: `main.cpp`, `regiongrabber.*` and `windowgrabber.*` are GPL
@@ -134,6 +139,5 @@ As stated in the source files:
 
 ## Planned
 
-- A PDF viewer: the KPDF interface on poppler-glib.
 - A weather applet: KWeather revived on Open-Meteo (ECMWF forecasts).
 - A WhatsApp Web application on KWPEPart.
