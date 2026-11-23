@@ -1,4 +1,4 @@
-#    This file is part of the KDE Utilities distribution
+#    This file is part of kde3-apps, the applications of the KDE3 revival
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -7,9 +7,9 @@
 
 cmake_minimum_required(VERSION 3.20...4.4)
 
-project(kdeutils VERSION 3.5.10 LANGUAGES C CXX)
+project(kde3-apps VERSION 3.5.10 LANGUAGES C CXX)
 
-set(KDEUTILS_VERSION "${PROJECT_VERSION}")
+set(KDE3_APPS_VERSION "${PROJECT_VERSION}")
 
 # kdelibs: the CMake package, install prefix, compiler settings, RUNPATH
 include(cmake/KDELibs.cmake)
@@ -22,6 +22,7 @@ add_compile_definitions(HAVE_CONFIG_H)
 # -I$(top_builddir) of every Makefile: config.h
 include_directories("${PROJECT_BINARY_DIR}")
 
+# from kdeutils
 if(KDEUTILS_BUILD_KCALC)
   add_subdirectory(kcalc)
 endif()
@@ -31,4 +32,9 @@ add_subdirectory(ktimer)
 add_subdirectory(kwallet)
 add_subdirectory(khexedit)
 add_subdirectory(ark)
+# from kdegraphics
+add_subdirectory(kview)
+add_subdirectory(kruler)
+add_subdirectory(ksnapshot)
+
 add_subdirectory(doc)
