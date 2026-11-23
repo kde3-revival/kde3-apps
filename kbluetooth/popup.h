@@ -59,6 +59,9 @@ public:
     // shows the popup next to the tray icon
     void popupAt(QWidget *icon);
 
+protected:
+    virtual void keyPressEvent(QKeyEvent *e);
+
 private slots:
     void refresh();
     void powerToggled(bool on);

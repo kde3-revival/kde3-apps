@@ -107,6 +107,7 @@ private:
     QMap<QString, QString> m_errors;
     QStringList m_poweredOnce;  // adapters switched on at login
     int m_iconState;
+    bool m_forceShown;      // started again while hidden: stay until an adapter comes
 
     bool m_showWithoutAdapter;
     bool m_powerOnLogin;

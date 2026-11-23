@@ -109,7 +109,7 @@ struct BluezAgentPrivate
             gchar *remote = g_dbus_error_get_remote_error(error);
             already = remote && !strcmp(remote, "org.bluez.Error.AlreadyExists");
             if (!already)
-                kdWarning() << "kbluetooth: RegisterAgent: " << error->message << endl;
+                kdWarning() << "RegisterAgent: " << error->message << endl;
             g_free(remote);
         }
         if (s_agent && (!error || already) && Bluez::self()->connection()) {
@@ -129,11 +129,11 @@ struct BluezAgentPrivate
         if (reply)
             g_variant_unref(reply);
         if (error) {
-            kdWarning() << "kbluetooth: RequestDefaultAgent: " << error->message << endl;
+            kdWarning() << "RequestDefaultAgent: " << error->message << endl;
             g_error_free(error);
         } else if (s_agent) {
             s_agent->m_registered = true;
-            kdDebug() << "kbluetooth: the default agent of bluetoothd" << endl;
+            kdDebug() << "the default agent of bluetoothd" << endl;
         }
     }
 };
@@ -172,7 +172,7 @@ void BluezAgent::connectionReady()
     GError *error = 0;
     GDBusNodeInfo *info = g_dbus_node_info_new_for_xml(introspection, &error);
     if (!info) {
-        kdWarning() << "kbluetooth: agent introspection: " << error->message << endl;
+        kdWarning() << "agent introspection: " << error->message << endl;
         g_error_free(error);
         return;
     }
@@ -181,7 +181,7 @@ void BluezAgent::connectionReady()
                                                  0, 0, &error);
     g_dbus_node_info_unref(info);
     if (!m_object) {
-        kdWarning() << "kbluetooth: agent object: " << error->message << endl;
+        kdWarning() << "agent object: " << error->message << endl;
         g_error_free(error);
     }
 }

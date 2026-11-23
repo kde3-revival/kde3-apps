@@ -256,6 +256,16 @@ void DevicePopup::refresh()
         place();
 }
 
+void DevicePopup::keyPressEvent(QKeyEvent *e)
+{
+    // a popup frame does not close on Escape by itself
+    if (e->key() == Key_Escape) {
+        hide();
+        return;
+    }
+    QFrame::keyPressEvent(e);
+}
+
 void DevicePopup::powerToggled(bool on)
 {
     m_tray->setPowered(on);

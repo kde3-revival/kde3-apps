@@ -32,7 +32,7 @@
 
 BluetoothTray::BluetoothTray()
     : KSystemTray(0, "kbluetooth"),
-      m_nextId(1000), m_agent(0), m_rfkill(0), m_iconState(-1),
+      m_nextId(1000), m_agent(0), m_rfkill(0), m_iconState(-1), m_forceShown(false),
       m_showWithoutAdapter(true), m_powerOnLogin(false), m_autostart(true)
 {
     m_subMenus.setAutoDelete(true);
@@ -172,7 +172,9 @@ void BluetoothTray::updateState()
                   .arg(i18n("Bluetooth")).arg(QStyleSheet::escape(tip)));
 
     // without an adapter the icon may hide itself
-    bool show = haveAdapter || m_showWithoutAdapter;
+    if (haveAdapter)
+        m_forceShown = false;
+    bool show = haveAdapter || m_showWithoutAdapter || m_forceShown;
     if (show && !isVisible())
         this->show();
     else if (!show && isVisible())
@@ -221,7 +223,11 @@ void BluetoothTray::connectionChanged(const QString &path, bool connected)
         return;
     if (connected)
         m_errors.remove(path);
-    // the notification uses the name of the device (it is not secret)
+    // switching the adapter off disconnects all: no notification for each
+    BluezAdapter adapter;
+    if (!connected && (!Bluez::self()->adapter(d.adapter, adapter) || !adapter.powered
+                       || adapter.powerState == "on-disabling"))
+        return;
     if (connected)
         notify("connected", i18n("%1 is connected.").arg(d.name));
     else
@@ -285,6 +291,7 @@ void BluetoothTray::showPopup()
 
 void BluetoothTray::activate()
 {
+    m_forceShown = true;
     if (!isVisible())
         show();
     showPopup();
@@ -518,6 +525,7 @@ void BluetoothTray::menuActivated(int id)
         break;
     case ActShowWithoutAdapter:
         m_showWithoutAdapter = !m_showWithoutAdapter;
+        m_forceShown = false;
         writeSettings();
         if (!m_showWithoutAdapter && adapterPath().isEmpty())
             KMessageBox::information(0, i18n("There is no Bluetooth adapter now, so the icon "

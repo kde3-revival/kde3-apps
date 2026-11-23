@@ -118,7 +118,7 @@ struct BluezPrivate
         if (!connection) {
             if (!g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
                 s_self->m_busError = QString::fromUtf8(error->message);
-                kdWarning() << "kbluetooth: no system bus: " << s_self->m_busError << endl;
+                kdWarning() << "no system bus: " << s_self->m_busError << endl;
                 emit s_self->serviceChanged(false);
                 // try again later: the system bus may be restarting
                 QTimer::singleShot(10000, s_self, SLOT(connectBus()));
@@ -134,7 +134,7 @@ struct BluezPrivate
     {
         if (!s_self)
             return;
-        kdWarning() << "kbluetooth: the system bus closed the connection" << endl;
+        kdWarning() << "the system bus closed the connection" << endl;
         s_self->dropConnection();
         QTimer::singleShot(5000, s_self, SLOT(connectBus()));
     }
@@ -192,7 +192,7 @@ struct BluezPrivate
                 g_variant_unref(reply);
         } else if (!reply) {
             if (!g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-                kdWarning() << "kbluetooth: GetManagedObjects: " << error->message << endl;
+                kdWarning() << "GetManagedObjects: " << error->message << endl;
         } else {
             GVariant *objects = g_variant_get_child_value(reply, 0);
             GVariantIter iter;
