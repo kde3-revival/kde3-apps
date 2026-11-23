@@ -60,7 +60,6 @@
 #include <kxmlguifactory.h>
 
 // local includes
-#include "xpdf/GlobalParams.h"
 #include "part.h"
 #include "ui/pageview.h"
 #include "ui/thumbnaillist.h"
@@ -111,7 +110,6 @@ K_EXPORT_COMPONENT_FACTORY(libkpdfpart, KPDFPartFactory)
 
 using namespace KPDF;
 
-unsigned int Part::m_count = 0;
 
 Part::Part(QWidget *parentWidget, const char *widgetName,
            QObject *parent, const char *name,
@@ -131,13 +129,6 @@ Part::Part(QWidget *parentWidget, const char *widgetName,
 
 	// create browser extension (for printing when embedded into browser)
 	m_bExtension = new BrowserExtension(this);
-
-	// xpdf 'extern' global class (m_count is a static instance counter)
-	//if ( m_count ) TODO check if we need to insert these lines..
-	//	delete globalParams;
-	globalParams = new GlobalParams("");
-	globalParams->setupBaseFonts(NULL);
-	m_count++;
 
 	// we need an instance
 	setInstance(KPDFPartFactory::instance());
@@ -339,8 +330,6 @@ Part::~Part()
     delete m_miniBar;
 
     delete m_document;
-    if ( --m_count == 0 )
-        delete globalParams;
 }
 
 void Part::notifyViewportChanged( bool /*smoothMove*/ )

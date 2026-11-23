@@ -32,7 +32,7 @@
 #include "observer.h"
 #include "page.h"
 #include "link.h"
-#include "generator_pdf/generator_pdf.h"  // PDF generator
+#include "generator_poppler/generator_poppler.h"  // PDF generator (poppler)
 #include "generator_kimgio/generator_kimgio.h"  // KIMGIO generator
 #include "conf/settings.h"
 
@@ -152,7 +152,7 @@ bool KPDFDocument::openDocument( const QString & docFile, const KURL & url, cons
 
     // create the generator based on the file's mimetype
     if ( (*mime).is( "application/pdf" ) )
-        generator = new PDFGenerator( this );
+        generator = new PopplerGenerator( this );
 //    else if ( mimeName == "application/postscript" )
 //        kdError() << "PS generator not available" << endl;
     else

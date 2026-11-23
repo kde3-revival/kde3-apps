@@ -15,7 +15,7 @@
 
 class QPixmap;
 class QRect;
-class TextPage;
+class KPDFTextPage;
 class KPDFPageTransition;
 class HighlightRect;
 class Annotation;
@@ -104,13 +104,14 @@ class KPDFPage
 
         NormalizedRect * findText( const QString & text, bool keepCase, NormalizedRect * last = 0 ) const;
         const QString getText( const NormalizedRect & rect ) const;
+        const KPDFTextPage * textPage() const { return m_text; }
         const ObjectRect * hasObject( ObjectRect::ObjectType type, double x, double y ) const;
         //const Annotation * getAnnotation( double x, double y ) const;
         const KPDFPageTransition * getTransition() const;
 
         // operations: set/delete contents (by KPDFDocument)
         void setPixmap( int p_id, QPixmap * pixmap );
-        void setSearchPage( TextPage * text );
+        void setSearchPage( KPDFTextPage * text );
         void setBookmark( bool state );
         void setObjectRects( const QValueList< ObjectRect * > rects );
         void setHighlight( int s_id, NormalizedRect * &r, const QColor & color );
@@ -127,7 +128,7 @@ class KPDFPage
         bool m_bookmarked;
 
         QMap< int, QPixmap * > m_pixmaps;
-        TextPage * m_text;
+        KPDFTextPage * m_text;
         QValueList< ObjectRect * > m_rects;
         QValueList< HighlightRect * > m_highlights;
         //QValueList< Annotation * > m_annotations;

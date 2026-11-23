@@ -18,7 +18,7 @@
 #include "pagetransition.h"
 #include "link.h"
 #include "conf/settings.h"
-#include "xpdf/TextOutputDev.h"
+#include "textpage.h"
 
 
 /** class KPDFPage **/
@@ -104,63 +104,16 @@ bool KPDFPage::hasTransition() const
 
 NormalizedRect * KPDFPage::findText( const QString & text, bool strictCase, NormalizedRect * lastRect ) const
 {
-    if ( text.isEmpty() )
+    if ( text.isEmpty() || !m_text )
         return 0;
-
-    // create a xpf's Unicode (unsigned int) array for the given text
-    const QChar * str = text.unicode();
-    int len = text.length();
-    QMemArray<Unicode> u(len);
-    for (int i = 0; i < len; ++i)
-        u[i] = str[i].unicode();
-
-    // find out the direction of search
-    enum SearchDir { FromTop, NextMatch, PrevMatch } dir = lastRect ? NextMatch : FromTop;
-    double sLeft, sTop, sRight, sBottom;
-    if ( dir == NextMatch )
-    {
-        sLeft = lastRect->left * m_width;
-        sTop = lastRect->top * m_height;
-        sRight = lastRect->right * m_width;
-        sBottom = lastRect->bottom * m_height;
-    }
-
-    // this loop is only for 'bad case' matches
-    bool found = false;
-    while ( !found )
-    {
-        if ( dir == FromTop )
-            found = m_text->findText( const_cast<Unicode*>(static_cast<const Unicode*>(u)), len, gTrue, gTrue, gFalse, gFalse, strictCase, gFalse, &sLeft, &sTop, &sRight, &sBottom );
-        else if ( dir == NextMatch )
-            found = m_text->findText( const_cast<Unicode*>(static_cast<const Unicode*>(u)), len, gFalse, gTrue, gTrue, gFalse, strictCase, gFalse, &sLeft, &sTop, &sRight, &sBottom );
-        else if ( dir == PrevMatch )
-            // FIXME: this doesn't work as expected (luckily backward search isn't yet used)
-	    // TODO: check if the new xpdf 3.01 code is able of searching backwards
-            found = m_text->findText( const_cast<Unicode*>(static_cast<const Unicode*>(u)), len, gTrue, gFalse, gFalse, gTrue, strictCase, gTrue, &sLeft, &sTop, &sRight, &sBottom );
-
-        // if not found (even in case unsensitive search), terminate
-        if ( !found )
-            break;
-    }
-
-    // if the page was found, return a new normalizedRect
-    if ( found )
-        return new NormalizedRect( sLeft / m_width, sTop / m_height, sRight / m_width, sBottom / m_height );
-    return 0;
+    return m_text->findText( text, strictCase, lastRect );
 }
 
 const QString KPDFPage::getText( const NormalizedRect & rect ) const
 {
     if ( !m_text )
         return QString::null;
-    int left = (int)( rect.left * m_width ),
-        top = (int)( rect.top * m_height ),
-        right = (int)( rect.right * m_width ),
-        bottom = (int)( rect.bottom * m_height );
-    GString * text = m_text->getText( left, top, right, bottom );
-    QString result = QString::fromUtf8( text->getCString() );
-    delete text;
-    return result; 
+    return m_text->getText( rect );
 }
 
 const ObjectRect * KPDFPage::hasObject( ObjectRect::ObjectType type, double x, double y ) const
@@ -185,7 +138,7 @@ void KPDFPage::setPixmap( int id, QPixmap * pixmap )
     m_pixmaps[id] = pixmap;
 }
 
-void KPDFPage::setSearchPage( TextPage * tp )
+void KPDFPage::setSearchPage( KPDFTextPage * tp )
 {
     delete m_text;
     m_text = tp;

@@ -150,9 +150,6 @@ private:
 	QGuardedPtr<MiniBar> m_miniBar;
 	QGuardedPtr<PresentationWidget> m_presentationWidget;
 
-	// static instances counter
-	static unsigned int m_count;
-
 	// this is a hack because we can not use writeConfig on part destructor
 	// and we don't want to writeconfig every time someone moves the splitter
 	// so we use a QTimer each 500 ms
