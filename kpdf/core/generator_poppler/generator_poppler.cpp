@@ -748,17 +748,24 @@ KPDFTextPage * PopplerGenerator::textPage( int pageNumber )
         rects.resize( 4 * nChars + 8 );
         uint n = 0;
         guint box = 0;
-        for ( const char * p = utf8; *p; p = g_utf8_next_char( p ), ++box )
+        for ( const char * p = utf8; *p; p = g_utf8_next_char( p ) )
         {
             gunichar c = g_utf8_get_char( p );
             float l = 0, t = 0, r = 0, b = 0;
-            if ( box < nBoxes )
+            // the direction marks poppler puts around right to left words
+            // have no box in the layout
+            bool mark = ( c >= 0x202a && c <= 0x202e ) || c == 0x200e || c == 0x200f ||
+                        ( c >= 0x2066 && c <= 0x2069 );
+            if ( !mark && box < nBoxes )
             {
-                l = boxes[box].x1 / w;
-                t = boxes[box].y1 / h;
-                r = boxes[box].x2 / w;
-                b = boxes[box].y2 / h;
+                // glyphs drawn right to left can come with x2 < x1
+                l = QMIN( boxes[box].x1, boxes[box].x2 ) / w;
+                t = QMIN( boxes[box].y1, boxes[box].y2 ) / h;
+                r = QMAX( boxes[box].x1, boxes[box].x2 ) / w;
+                b = QMAX( boxes[box].y1, boxes[box].y2 ) / h;
             }
+            if ( !mark )
+                ++box;
             // characters outside the BMP take two QChars, with the same box
             int units = c > 0xffff ? 2 : 1;
             if ( 4 * ( n + units ) > rects.size() )
