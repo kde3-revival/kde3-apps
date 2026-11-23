@@ -70,35 +70,60 @@ static bool sameRect( const NormalizedRect & a, const NormalizedRect & b )
            fabs( a.right - b.right ) < eps && fabs( a.bottom - b.bottom ) < eps;
 }
 
+// what search compares: presentation forms and ligatures (U+FB00..U+FDFF,
+// U+FE70..U+FEFF: Arabic shaping, "fi") as their letters, without
+// formatting characters (direction marks), runs of white space as one space
+static void appendSearchForm( QString & out, QChar c, bool & inSpace )
+{
+    if ( c.category() == QChar::Other_Format )
+        return;
+    if ( c.isSpace() )
+    {
+        if ( !inSpace )
+            out += ' ';
+        inSpace = true;
+        return;
+    }
+    inSpace = false;
+    ushort u = c.unicode();
+    if ( ( u >= 0xfb00 && u <= 0xfdff ) || ( u >= 0xfe70 && u <= 0xfeff ) )
+    {
+        const QString & d = c.decomposition();
+        if ( !d.isEmpty() )
+        {
+            out += d;
+            return;
+        }
+    }
+    out += c;
+}
+
 NormalizedRect * KPDFTextPage::findText( const QString & text, bool caseSensitive,
                                          const NormalizedRect * last ) const
 {
-    QString needle = text.simplifyWhiteSpace();
+    QString needle;
+    bool inSpace = true;
+    for ( uint i = 0; i < text.length(); ++i )
+        appendSearchForm( needle, text[i], inSpace );
+    needle = needle.stripWhiteSpace();
     if ( needle.isEmpty() || m_text.isEmpty() )
         return 0;
 
-    // the page text with every run of white space made one space, and
-    // where each of its characters comes from
+    // the page text in that form, and where each of its characters
+    // comes from
     uint len = m_text.length();
     QString hay;
     hay.reserve( len );
     QMemArray<uint> from( len + 1 );
     uint n = 0;
-    bool inSpace = false;
+    inSpace = false;
     for ( uint i = 0; i < len; ++i )
     {
-        QChar c = m_text[i];
-        if ( c.isSpace() )
-        {
-            if ( inSpace )
-                continue;
-            inSpace = true;
-            c = ' ';
-        }
-        else
-            inSpace = false;
-        hay += c;
-        from[n++] = i;
+        appendSearchForm( hay, m_text[i], inSpace );
+        if ( hay.length() + 1 > from.size() )
+            from.resize( 2 * hay.length() + 1 );
+        while ( n < hay.length() )
+            from[n++] = i;
     }
     from[n] = len;
 
@@ -110,7 +135,7 @@ NormalizedRect * KPDFTextPage::findText( const QString & text, bool caseSensitiv
     while ( ( pos = hay.find( needle, pos, caseSensitive ) ) >= 0 )
     {
         NormalizedRect r;
-        uint start = from[pos], end = from[pos + needle.length()];
+        uint start = from[pos], end = from[pos + needle.length() - 1] + 1;
         ++pos;
         if ( !unite( this, start, end, r ) )
             continue;
