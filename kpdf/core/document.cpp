@@ -1213,7 +1213,6 @@ void KPDFDocument::cleanupPixmapMemory( int /*sure? bytesOffset*/ )
     if ( memoryToFree > 0 )
     {
         // [MEM] free memory starting from older pixmaps
-        int pagesFreed = 0;
         QValueList< AllocatedPixmap * >::iterator pIt = d->allocatedPixmapsFifo.begin();
         QValueList< AllocatedPixmap * >::iterator pEnd = d->allocatedPixmapsFifo.end();
         while ( (pIt != pEnd) && (memoryToFree > 0) )
@@ -1225,7 +1224,6 @@ void KPDFDocument::cleanupPixmapMemory( int /*sure? bytesOffset*/ )
                 pIt = d->allocatedPixmapsFifo.remove( pIt );
                 d->allocatedPixmapsTotalMemory -= p->memory;
                 memoryToFree -= p->memory;
-                pagesFreed++;
                 // delete pixmap
                 pages_vector[ p->page ]->deletePixmap( p->id );
                 // delete allocation descriptor
@@ -1233,7 +1231,6 @@ void KPDFDocument::cleanupPixmapMemory( int /*sure? bytesOffset*/ )
             } else
                 ++pIt;
         }
-        //p--rintf("freeMemory A:[%d -%d = %d] \n", d->allocatedPixmapsFifo.count() + pagesFreed, pagesFreed, d->allocatedPixmapsFifo.count() );
     }
 }
 
