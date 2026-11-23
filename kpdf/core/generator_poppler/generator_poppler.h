@@ -89,7 +89,6 @@ class PopplerGenerator : public Generator
         friend class PopplerRenderThread;
 
         // all of these need 'docLock' held
-        PopplerPage * popplerPage( int pageNumber );
         QImage * renderPage( int pageNumber, int width, int height );
         QValueList< ObjectRect * > objectRects( int pageNumber );
         KPDFTextPage * textPage( int pageNumber );
@@ -105,7 +104,7 @@ class PopplerGenerator : public Generator
 
         QMutex docLock;
         PopplerDocument * m_doc;
-        QValueVector< PopplerPage * > m_pages;
+        int m_pageCount;
         QColor paperColor;
         bool m_usedPassword;
 

@@ -68,13 +68,30 @@ static QString fromUtf8( const char * s )
     return s ? QString::fromUtf8( s ) : QString::null;
 }
 
+// a page of the document, for the time it is used: poppler-glib pages
+// keep what they parsed (about half a megabyte for a page of text), so
+// they are not cached
+class PageRef
+{
+    public:
+        PageRef( PopplerDocument * doc, int pageNumber, int pageCount )
+            : m_page( doc && pageNumber >= 0 && pageNumber < pageCount ?
+                      poppler_document_get_page( doc, pageNumber ) : 0 ) {}
+        ~PageRef() { if ( m_page ) g_object_unref( m_page ); }
+        operator PopplerPage * () const { return m_page; }
+    private:
+        PageRef( const PageRef & );
+        PageRef & operator=( const PageRef & );
+        PopplerPage * m_page;
+};
+
 static QString orUnknown( const QString & s )
 {
     return s.isEmpty() ? i18n( "Unknown" ) : s;
 }
 
 PopplerGenerator::PopplerGenerator( KPDFDocument * doc )
-    : Generator( doc ), m_doc( 0 ), m_usedPassword( false ), ready( true ),
+    : Generator( doc ), m_doc( 0 ), m_pageCount( 0 ), m_usedPassword( false ), ready( true ),
     docInfoDirty( true ), docSynopsisDirty( true )
 {
     reparseConfig();
@@ -90,10 +107,6 @@ PopplerGenerator::~PopplerGenerator()
         delete renderThread;
     }
     docLock.lock();
-    for ( uint i = 0; i < m_pages.count(); ++i )
-        if ( m_pages[i] )
-            g_object_unref( m_pages[i] );
-    m_pages.clear();
     if ( m_doc )
         g_object_unref( m_doc );
     m_doc = 0;
@@ -184,14 +197,12 @@ bool PopplerGenerator::loadDocument( const QString & filePath, QValueVector<KPDF
 
     // build Pages: sizes as shown, with the page's own rotation applied
     uint pageCount = poppler_document_get_n_pages( m_doc );
-    m_pages.resize( pageCount );
-    for ( uint i = 0; i < pageCount; i++ )
-        m_pages[i] = 0;
+    m_pageCount = pageCount;
     pagesVector.resize( pageCount );
     for ( uint i = 0; i < pageCount ; i++ )
     {
         double w = 0, h = 0;
-        PopplerPage * pp = popplerPage( i );
+        PageRef pp( m_doc, i, m_pageCount );
         if ( pp )
             poppler_page_get_size( pp, &w, &h );
         KPDFPage * page = new KPDFPage( i, w, h, 0 );
@@ -498,7 +509,7 @@ bool PopplerGenerator::print( KPrinter& printer )
     }
 
     QValueList<int> pageList;
-    int pageCount = m_pages.count();
+    int pageCount = m_pageCount;
     if (!printer.previewOnly())
         pageList = printer.pageList();
     else
@@ -510,7 +521,7 @@ bool PopplerGenerator::print( KPrinter& printer )
     {
         if ( *pIt < 1 || *pIt > pageCount )
             continue;
-        PopplerPage * page = popplerPage( *pIt - 1 );
+        PageRef page( m_doc, *pIt - 1, m_pageCount );
         if ( !page )
             continue;
         double w, h;
@@ -630,20 +641,10 @@ bool PopplerGenerator::reparseConfig()
 }
 //END Generator inherited functions
 
-PopplerPage * PopplerGenerator::popplerPage( int pageNumber )
-// note: MUTEX is LOCKED while calling this (or the document is loading)
-{
-    if ( !m_doc || pageNumber < 0 || pageNumber >= (int)m_pages.count() )
-        return 0;
-    if ( !m_pages[pageNumber] )
-        m_pages[pageNumber] = poppler_document_get_page( m_doc, pageNumber );
-    return m_pages[pageNumber];
-}
-
 QImage * PopplerGenerator::renderPage( int pageNumber, int width, int height )
 // note: MUTEX is LOCKED while calling this
 {
-    PopplerPage * page = popplerPage( pageNumber );
+    PageRef page( m_doc, pageNumber, m_pageCount );
     if ( !page || width <= 0 || height <= 0 )
         return 0;
 
@@ -680,7 +681,7 @@ QValueList< ObjectRect * > PopplerGenerator::objectRects( int pageNumber )
 // note: MUTEX is LOCKED while calling this
 {
     QValueList< ObjectRect * > rects;
-    PopplerPage * page = popplerPage( pageNumber );
+    PageRef page( m_doc, pageNumber, m_pageCount );
     if ( !page )
         return rects;
     double w, h;
@@ -724,7 +725,7 @@ QValueList< ObjectRect * > PopplerGenerator::objectRects( int pageNumber )
 KPDFTextPage * PopplerGenerator::textPage( int pageNumber )
 // note: MUTEX is LOCKED while calling this
 {
-    PopplerPage * page = popplerPage( pageNumber );
+    PageRef page( m_doc, pageNumber, m_pageCount );
     double w = 0, h = 0;
     if ( page )
         poppler_page_get_size( page, &w, &h );
@@ -871,7 +872,7 @@ DocumentViewport PopplerGenerator::viewportFromDest( PopplerDest * dest )
     }
 
     vp.pageNumber = dest->page_num - 1;
-    PopplerPage * page = popplerPage( vp.pageNumber );
+    PageRef page( m_doc, vp.pageNumber, m_pageCount );
     if ( !page )
     {
         vp.pageNumber = -1;
@@ -971,7 +972,7 @@ void PopplerGenerator::addSynopsisChildren( QDomNode * parent, PopplerIndexIter 
 void PopplerGenerator::addTransition( int pageNumber, KPDFPage * page )
 // note: called while loading
 {
-    PopplerPage * pp = popplerPage( pageNumber );
+    PageRef pp( m_doc, pageNumber, m_pageCount );
     if ( !pp )
         return;
 
