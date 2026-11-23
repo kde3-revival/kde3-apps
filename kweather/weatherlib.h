@@ -78,6 +78,9 @@ class WeatherLib : public QObject
 		QString sunSet(const QString &id);
 		QStringList hourly(const QString &id, int hours);
 		QStringList daily(const QString &id);
+		QStringList hourlyValues(const QString &id, int hours);
+		QStringList dailyValues(const QString &id);
+		QString currentTime(const QString &id);
 		QString rainNextHour(const QString &id);
 		QString error(const QString &id);
 		bool hasData(const QString &id);

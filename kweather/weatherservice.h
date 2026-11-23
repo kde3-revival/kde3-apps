@@ -116,6 +116,18 @@ class WeatherService : public QObject, public DCOPObject
 		 * \t<minimum>\t<precipitation>\t<probability>\t<description>".
 		 */
 		QStringList dailyForecast(const QString &stationID);
+		/**
+		 * The same as hourlyForecast() and dailyForecast(), with numbers
+		 * (C locale, empty if unknown) instead of text, and the units at
+		 * the end: hours "<time>\t<icon>\t<temperature>\t<precipitation>
+		 * \t<probability>\t<description>\t<temperature unit>\t<precipitation
+		 * unit>", days "<date>\t<icon>\t<maximum>\t<minimum>\t
+		 * <precipitation>\t<probability>\t<description>\t<units...>".
+		 */
+		QStringList hourlyValues(const QString &stationID, int hours);
+		QStringList dailyValues(const QString &stationID);
+		/** The local time (ISO 8601) of the current weather. */
+		QString currentTime(const QString &stationID);
 		/** The precipitation of the next hour if there is any, else empty. */
 		QString rainNextHour(const QString &stationID);
 

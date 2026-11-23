@@ -729,6 +729,79 @@ QStringList WeatherLib::daily(const QString &id)
 	return list;
 }
 
+namespace
+{
+
+QString cNumber(double v, int decimals)
+{
+    return valid(v) ? QLocale::c().toString(v, 'f', decimals) : QString::null;
+}
+
+QString temperatureUnit(const WeatherLib::Units &u)
+{
+    return u.temperature == "fahrenheit" ? QString::fromUtf8("\xc2\xb0""F")
+                                         : QString::fromUtf8("\xc2\xb0""C");
+}
+
+QString precipitationUnit(const WeatherLib::Units &u)
+{
+    return u.precipitation == "inch" ? QString::fromLatin1("in") : QString::fromLatin1("mm");
+}
+
+}
+
+QStringList WeatherLib::hourlyValues(const QString &id, int hours)
+{
+	QStringList list;
+	Data *d = findData(id);
+	if (!d)
+		return list;
+	long t = now();
+	QValueList<Hour>::ConstIterator it = d->hours.begin();
+	for (; it != d->hours.end() && int(list.count()) < hours; ++it) {
+		const Hour &h = *it;
+		if (h.time <= t)
+			continue;
+		list.append(d->local(h.time).toString(Qt::ISODate) + '\t'
+		            + WeatherIcons::iconName(h.code, h.day) + '\t'
+		            + cNumber(h.temp, 1) + '\t' + cNumber(h.precip, 2) + '\t'
+		            + cNumber(h.prob, 0) + '\t' + WeatherIcons::description(h.code) + '\t'
+		            + temperatureUnit(d->hourUnits) + '\t' + precipitationUnit(d->hourUnits));
+	}
+	return list;
+}
+
+QStringList WeatherLib::dailyValues(const QString &id)
+{
+	QStringList list;
+	Data *d = findData(id);
+	if (!d)
+		return list;
+	QDate today = d->local(now()).date();
+	QValueList<Day>::ConstIterator it = d->days.begin();
+	for (; it != d->days.end(); ++it) {
+		const Day &dy = *it;
+		QDate date = d->local(dy.time + 12 * 3600).date();
+		if (date < today)
+			continue;
+		list.append(date.toString(Qt::ISODate) + '\t'
+		            + WeatherIcons::iconName(dy.code, true) + '\t'
+		            + cNumber(dy.tmax, 1) + '\t' + cNumber(dy.tmin, 1) + '\t'
+		            + cNumber(dy.precip, 2) + '\t' + cNumber(dy.prob, 0) + '\t'
+		            + WeatherIcons::description(dy.code) + '\t'
+		            + temperatureUnit(d->dayUnits) + '\t' + precipitationUnit(d->dayUnits));
+	}
+	return list;
+}
+
+QString WeatherLib::currentTime(const QString &id)
+{
+	Data *d = findData(id);
+	if (!d || !d->hasCurrent)
+		return QString::null;
+	return d->local(d->current.time).toString(Qt::ISODate);
+}
+
 QString WeatherLib::rainNextHour(const QString &id)
 {
 	Data *d = findData(id);
