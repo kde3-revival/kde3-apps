@@ -77,7 +77,7 @@ class WeatherLib::Data
 {
 public:
     Data()
-        : latitude(0), longitude(0), utcOffset(0), pending(0),
+        : latitude(0), longitude(0), utcOffset(0), pending(0), again(false),
           hasCurrent(false), time(0), temp(noValue), apparent(noValue),
           humidity(noValue), dewPoint(noValue), pressure(noValue),
           windSpeed(noValue), windDirection(noValue), gusts(noValue),
@@ -93,6 +93,7 @@ public:
 
     QDateTime fetched;      // the last complete download
     int pending;            // jobs still running
+    bool again;             // download again when they are done
     QString error;          // of the last download
 
     bool hasCurrent;
@@ -281,8 +282,12 @@ WeatherLib::Data* WeatherLib::findData(const QString &id)
 
 void WeatherLib::getData(Data *d, bool force)
 {
-	if (d->pending > 0)
+	if (d->pending > 0) {
+		// e.g. new units: the running download asked for the old ones
+		if (force)
+			d->again = true;
 		return;
+	}
 	if (!force && d->fetched.isValid() && d->error.isEmpty()
 	    && d->fetched.secsTo(QDateTime::currentDateTime()) < refreshSeconds) {
 		emit fileUpdate(d->id);
@@ -372,6 +377,11 @@ void WeatherLib::slotJobDone(KIO::Job *job)
 	if (d->pending == 0) {
 		if (d->error.isEmpty())
 			d->fetched = QDateTime::currentDateTime();
+		if (d->again) {
+			d->again = false;
+			getData(d, true);
+			return;
+		}
 		emit fileUpdate(id);
 	}
 }
