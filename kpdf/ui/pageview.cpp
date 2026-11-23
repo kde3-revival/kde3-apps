@@ -1585,6 +1585,16 @@ void PageView::updateItemSize( PageViewItem * item, int colWidth, int rowHeight 
     else
         kdDebug() << "calling updateItemSize with unrecognized d->zoomMode!" << endl;
 #endif
+    // a page pixmap is at most 32767 pixels wide and high (X11, cairo), and
+    // the frame around it must stay within the 16 bit X11 coordinates: a
+    // huge page or zoom shows the page at the largest size that fits
+    const int maxSide = 32000;
+    if ( item->width() > maxSide || item->height() > maxSide )
+    {
+        double f = QMIN( (double)maxSide / item->width(), (double)maxSide / item->height() );
+        item->setWHZ( QMIN( maxSide, (int)( item->width() * f ) ),
+                      QMIN( maxSide, (int)( item->height() * f ) ), item->zoomFactor() * f );
+    }
 }
 
 PageViewItem * PageView::pickItemOnPoint( int x, int y )

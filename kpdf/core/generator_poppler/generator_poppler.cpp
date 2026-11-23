@@ -650,10 +650,20 @@ QImage * PopplerGenerator::renderPage( int pageNumber, int width, int height )
     if ( !page || width <= 0 || height <= 0 )
         return 0;
 
+    // cairo image surfaces and X pixmaps are at most 32767 pixels wide and
+    // high (the page view does not ask for more)
+    if ( width > 32767 || height > 32767 )
+    {
+        kdDebug() << "PopplerGenerator: page " << pageNumber + 1 << " can not be rendered at "
+                  << width << "x" << height << " (32767 pixels at most)" << endl;
+        return 0;
+    }
+    int rw = width, rh = height;
+
     // cairo draws into the QImage: a 32 bit QImage is one block of rows of
     // 0xAARRGGBB words in the native byte order, as CAIRO_FORMAT_RGB24
-    QImage * image = new QImage( width, height, 32 );
-    if ( image->isNull() || image->bytesPerLine() != cairo_format_stride_for_width( CAIRO_FORMAT_RGB24, width ) )
+    QImage * image = new QImage( rw, rh, 32 );
+    if ( image->isNull() || image->bytesPerLine() != cairo_format_stride_for_width( CAIRO_FORMAT_RGB24, rw ) )
     {
         delete image;
         return 0;
@@ -661,21 +671,34 @@ QImage * PopplerGenerator::renderPage( int pageNumber, int width, int height )
     image->fill( paperColor.rgb() );
 
     cairo_surface_t * surface = cairo_image_surface_create_for_data( image->bits(),
-            CAIRO_FORMAT_RGB24, width, height, image->bytesPerLine() );
+            CAIRO_FORMAT_RGB24, rw, rh, image->bytesPerLine() );
     cairo_t * cr = cairo_create( surface );
-    double w, h;
-    poppler_page_get_size( page, &w, &h );
-    if ( w > 0 && h > 0 )
-        cairo_scale( cr, width / w, height / h );
-    // the page is a group on a transparent backdrop, put on the paper
-    // afterwards: blend modes must not mix with the paper colour
-    cairo_push_group( cr );
-    poppler_page_render( page, cr );
-    cairo_pop_group_to_source( cr );
-    cairo_paint( cr );
+    bool ok = cairo_status( cr ) == CAIRO_STATUS_SUCCESS;
+    if ( ok )
+    {
+        double w, h;
+        poppler_page_get_size( page, &w, &h );
+        if ( w > 0 && h > 0 )
+            cairo_scale( cr, rw / w, rh / h );
+        // the page is a group on a transparent backdrop, put on the paper
+        // afterwards: blend modes must not mix with the paper colour
+        cairo_push_group( cr );
+        poppler_page_render( page, cr );
+        cairo_pop_group_to_source( cr );
+        cairo_paint( cr );
+        ok = cairo_status( cr ) == CAIRO_STATUS_SUCCESS;
+    }
     cairo_destroy( cr );
     cairo_surface_flush( surface );
+    ok = ok && cairo_surface_status( surface ) == CAIRO_STATUS_SUCCESS;
     cairo_surface_destroy( surface );
+    if ( !ok )
+    {
+        kdDebug() << "PopplerGenerator: cairo could not render page " << pageNumber + 1
+                  << " at " << rw << "x" << rh << endl;
+        delete image;
+        return 0;
+    }
     return image;
 }
 
