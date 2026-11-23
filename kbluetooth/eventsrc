@@ -15,4 +15,4 @@ default_presentation=16
 [error]
 Name=Bluetooth error
 Comment=An action on a Bluetooth device or adapter failed
-default_presentation=16
+default_presentation=0
