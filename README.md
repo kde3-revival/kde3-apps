@@ -126,8 +126,9 @@ As stated in the source files:
   KTimer, KWalletManager, KRuler.  Most files of KView say GPL version 2
   only; a few in `kview/kviewviewer/` say version 2 or later.  KCharSelect
   and some single files have no licence header; their About dialogs say GPL.
-- KWhatsApp: GPL version 2 or later; its icon is a chat bubble of its own,
-  not WhatsApp's logo.  KWhatsApp is not made or endorsed by WhatsApp.
+- KWhatsApp: GPL version 2 or later.  Its icon is WhatsApp's glyph (a
+  trademark of WhatsApp), traced to SVG: see `kwhatsapp/ICONS`.  KWhatsApp is not made or endorsed by
+  WhatsApp.
 - KSnapshot: `main.cpp`, `regiongrabber.*` and `windowgrabber.*` are GPL
   version 2 or later; `ksnapshot.cpp`, `quickshot.cpp` and `quickshot.h`
   say "Released under the LGPL" without a version; the other files have no
