@@ -37,6 +37,7 @@
 #include "core/page.h"
 #include "core/textpage.h"
 #include "ui/pagepainter.h"
+#include "conf/settings.h"
 
 // gets the pixmaps of the requests and counts them
 class Observer : public DocumentObserver
@@ -80,8 +81,11 @@ static void printOutline( KPDFDocument * doc, const QDomNode & parent, int depth
         QString vp = e.attribute( "Viewport" );
         if ( vp.isEmpty() && e.hasAttribute( "ViewportName" ) )
             vp = doc->getMetaData( "NamedViewport", e.attribute( "ViewportName" ) );
-        int page = vp.isEmpty() ? -1 : DocumentViewport( vp ).pageNumber;
-        out << QString().fill( ' ', 2 * depth ) << e.tagName() << " -> page " << page + 1 << "\n";
+        DocumentViewport v = vp.isEmpty() ? DocumentViewport() : DocumentViewport( vp );
+        out << QString().fill( ' ', 2 * depth ) << e.tagName() << " -> page " << v.pageNumber + 1;
+        if ( v.rePos.enabled )
+            out << QString( " at %1,%2" ).arg( v.rePos.normalizedX, 0, 'f', 3 ).arg( v.rePos.normalizedY, 0, 'f', 3 );
+        out << "\n";
         printOutline( doc, n, depth + 1 );
     }
 }
@@ -113,9 +117,11 @@ int main( int argc, char ** argv )
     if ( argc < 3 )
     {
         fprintf( stderr,
-            "usage: kpdfcheck render FILE PAGE WIDTH OUT.png\n"
+            "usage: kpdfcheck render FILE PAGE WIDTH OUT.png|-\n"
             "       kpdfcheck text FILE PAGE\n"
             "       kpdfcheck boxes FILE PAGE FROM TO     (character boxes)\n"
+            "       kpdfcheck cursor FILE PAGE X Y        (text cursor position at a point)\n"
+            "       kpdfcheck images FILE PAGE            (image rects)\n"
             "       kpdfcheck rect FILE PAGE L T R B      (text of a normalized rect)\n"
             "       kpdfcheck select FILE PAGE X1 Y1 X2 Y2 (text selection between two points)\n"
             "       kpdfcheck search FILE WORD [case]\n"
@@ -171,6 +177,11 @@ int main( int argc, char ** argv )
     else if ( cmd == "render" && args.count() >= 3 )
     {
         int page = args[0].toInt() - 1, width = args[1].toInt();
+        if ( page < 0 || page >= (int)pages || width <= 0 )
+        {
+            out << "bad page or width\n";
+            return 1;
+        }
         const KPDFPage * kp = doc->page( page );
         int height = (int)( kp->ratio() * width + 0.5 );
         QValueList< PixmapRequest * > req;
@@ -179,18 +190,30 @@ int main( int argc, char ** argv )
         doc->requestPixmaps( req );
         waitFor( obs, 1 );
         out << "render_ms " << t.elapsed() << " size " << width << "x" << height << "\n";
+        if ( !kp->hasPixmap( PAGEVIEW_ID, width, height ) )
+        {
+            out << "no pixmap\n";
+            return 1;
+        }
         // through the painter of the views, without their decorations
         QPixmap pm( width, height );
         QPainter painter( &pm );
         PagePainter::paintPageOnPainter( kp, PAGEVIEW_ID, 0, &painter, QRect( 0, 0, width, height ), width, height );
         painter.end();
-        if ( !pm.convertToImage().save( args[2], "PNG" ) )
+        QImage img = pm.convertToImage();
+        long ink = 0;
+        for ( int y = 0; y < img.height(); ++y )
+            for ( int x = 0; x < img.width(); ++x )
+                if ( ( img.pixel( x, y ) & 0xffffff ) != 0xffffff )
+                    ++ink;
+        out << "non_white_pixels " << ink << "\n";
+        if ( args[2] != "-" && !img.save( args[2], "PNG" ) )
         {
             out << "save failed\n";
             return 1;
         }
     }
-    else if ( ( cmd == "text" || cmd == "boxes" || cmd == "rect" || cmd == "select" || cmd == "links" ) && args.count() >= 1 )
+    else if ( ( cmd == "text" || cmd == "boxes" || cmd == "cursor" || cmd == "images" || cmd == "rect" || cmd == "select" || cmd == "links" ) && args.count() >= 1 )
     {
         int page = args[0].toInt() - 1;
         if ( page < 0 || page >= (int)pages )
@@ -200,6 +223,23 @@ int main( int argc, char ** argv )
         const KPDFTextPage * tp = kp->textPage();
         if ( cmd == "text" )
             out << tp->text();
+        else if ( cmd == "cursor" && args.count() >= 3 )
+            out << "cursor " << tp->cursorAt( args[1].toDouble(), args[2].toDouble() ) << " of " << tp->length() << "\n";
+        else if ( cmd == "images" )
+        {
+            // image rects come with a pixmap of the page view, when shown
+            KpdfSettings::setHighlightImages( true );
+            QValueList< PixmapRequest * > req;
+            req.push_back( new PixmapRequest( PAGEVIEW_ID, page, 200, (int)( 200 * kp->ratio() ), 1, false ) );
+            doc->requestPixmaps( req );
+            waitFor( obs, 1 );
+            const QValueList< ObjectRect * > & rects = kp->objectRects();
+            QValueList< ObjectRect * >::const_iterator it = rects.begin(), end = rects.end();
+            for ( ; it != end; ++it )
+                if ( (*it)->objectType() == ObjectRect::Image )
+                    out << QString( "image %1 %2 %3 %4\n" ).arg( (*it)->left, 0, 'f', 3 ).arg( (*it)->top, 0, 'f', 3 )
+                           .arg( (*it)->right, 0, 'f', 3 ).arg( (*it)->bottom, 0, 'f', 3 );
+        }
         else if ( cmd == "boxes" && args.count() >= 3 )
             for ( uint i = args[1].toUInt(); i < tp->length() && i < args[2].toUInt(); ++i )
             {
