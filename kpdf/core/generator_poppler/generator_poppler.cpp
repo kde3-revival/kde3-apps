@@ -281,7 +281,9 @@ bool PopplerGenerator::isAllowed( int permissions )
     if ( !m_doc )
         return false;
 
+    docLock.lock();
     int p = poppler_document_get_permissions( m_doc );
+    docLock.unlock();
     bool b = true;
     if (permissions & KPDFDocument::AllowModify) b = b && (p & POPPLER_PERMISSIONS_OK_TO_MODIFY);
     if (permissions & KPDFDocument::AllowCopy) b = b && (p & POPPLER_PERMISSIONS_OK_TO_COPY);
@@ -576,7 +578,10 @@ QString PopplerGenerator::getMetaData( const QString & key, const QString & opti
     if ( key == "StartFullScreen" )
     {
         // asking for the 'start in fullscreen mode' (pdf property)
-        if ( poppler_document_get_page_mode( m_doc ) == POPPLER_PAGE_MODE_FULL_SCREEN )
+        docLock.lock();
+        bool fullScreen = poppler_document_get_page_mode( m_doc ) == POPPLER_PAGE_MODE_FULL_SCREEN;
+        docLock.unlock();
+        if ( fullScreen )
             return "yes";
     }
     else if ( key == "NamedViewport" && !option.isEmpty() )
@@ -597,7 +602,10 @@ QString PopplerGenerator::getMetaData( const QString & key, const QString & opti
     }
     else if ( key == "OpenTOC" )
     {
-        if ( poppler_document_get_page_mode( m_doc ) == POPPLER_PAGE_MODE_USE_OUTLINES )
+        docLock.lock();
+        bool outlines = poppler_document_get_page_mode( m_doc ) == POPPLER_PAGE_MODE_USE_OUTLINES;
+        docLock.unlock();
+        if ( outlines )
             return "yes";
     }
     return QString();
