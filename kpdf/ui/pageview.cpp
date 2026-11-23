@@ -25,6 +25,8 @@
 #include <qtooltip.h>
 #include <qapplication.h>
 #include <qclipboard.h>
+#include <qmap.h>
+#include <qpair.h>
 #include <dcopclient.h>
 #include <kcursor.h>
 #include <kiconloader.h>
@@ -51,6 +53,7 @@
 #include "core/document.h"
 #include "core/page.h"
 #include "core/link.h"
+#include "core/textpage.h"
 #include "core/generator.h"
 #include "conf/settings.h"
 
@@ -107,6 +110,7 @@ public:
     KToggleAction * aMouseNormal;
     KToggleAction * aMouseSelect;
     KToggleAction * aMouseEdit;
+    KToggleAction * aMouseTextSelect;
     KSelectAction * aZoom;
     KToggleAction * aZoomFitWidth;
     KToggleAction * aZoomFitPage;
@@ -114,6 +118,15 @@ public:
     KToggleAction * aViewTwoPages;
     KToggleAction * aViewContinuous;
     KAction * aPrevAction;
+
+    // text selection: from the anchor (where the drag began) to the cursor,
+    // as page numbers and cursor positions in the text of the page
+    bool textSelecting;
+    bool hasTextSelection;
+    int selAnchorPage, selCursorPage;
+    uint selAnchorPos, selCursorPos;
+    // pages with selection highlights, and the range they show
+    QMap< int, QPair< uint, uint > > selShown;
 };
 
 
@@ -201,6 +214,11 @@ PageView::PageView( QWidget *parent, KPDFDocument *document )
     d->messageWindow = new PageViewMessage(this);
     d->tip = new PageViewTip( this );
     d->aPrevAction = 0;
+    d->aMouseTextSelect = 0;
+    d->textSelecting = false;
+    d->hasTextSelection = false;
+    d->selAnchorPage = d->selCursorPage = -1;
+    d->selAnchorPos = d->selCursorPos = 0;
 
     // widget setup: setup focus, accept drops and track mouse
     viewport()->setFocusProxy( this );
@@ -283,6 +301,9 @@ void PageView::setupActions( KActionCollection * ac )
     d->aMouseSelect = new KRadioAction( i18n("&Select Tool"), "frame_edit", 0, this, SLOT( slotSetMouseSelect() ), ac, "mouse_select" );
     d->aMouseSelect->setExclusiveGroup( "MouseType" );
 
+    d->aMouseTextSelect = new KRadioAction( i18n("&Text Selection Tool"), "text", 0, this, SLOT( slotSetMouseTextSelect() ), ac, "mouse_textselect" );
+    d->aMouseTextSelect->setExclusiveGroup( "MouseType" );
+
 /*    d->aMouseEdit = new KRadioAction( i18n("Draw"), "edit", 0, this, SLOT( slotSetMouseDraw() ), ac, "mouse_draw" );
     d->aMouseEdit->setExclusiveGroup("MouseType");
     d->aMouseEdit->setEnabled( false ); // implement feature before removing this line*/
@@ -319,6 +340,14 @@ void PageView::notifySetup( const QValueVector< KPDFPage * > & pageSet, bool doc
         if ( !documentChanged )
             return;
     }
+
+    // the text selection belonged to the old pages
+    bool hadTextSelection = d->hasTextSelection;
+    d->textSelecting = false;
+    d->hasTextSelection = false;
+    d->selShown.clear();
+    if ( hadTextSelection )
+        emit textSelectionChanged( false );
 
     // delete all widgets (one for each page in pageSet)
     QValueVector< PageViewItem * >::iterator dIt = d->items.begin(), dEnd = d->items.end();
@@ -636,6 +665,27 @@ void PageView::keyPressEvent( QKeyEvent * e )
 {
     e->accept();
 
+    // text selection keys
+    if ( ( e->state() & ControlButton ) && !d->typeAheadActive )
+    {
+        if ( e->key() == Key_C && d->hasTextSelection )
+        {
+            copyTextSelection();
+            return;
+        }
+        if ( e->key() == Key_A && !d->items.isEmpty() )
+        {
+            selectAllText();
+            return;
+        }
+    }
+    if ( e->key() == Key_Escape && d->hasTextSelection && !d->typeAheadActive &&
+         d->mouseSelectionRect.isNull() )
+    {
+        clearTextSelection();
+        return;
+    }
+
     // if performing a selection or dyn zooming, disable keys handling
     if ( ( !d->mouseSelectionRect.isNull() && e->key() != Qt::Key_Escape ) || d->mouseMidStartY != -1 )
         return;
@@ -888,6 +938,34 @@ void PageView::contentsMouseMoveEvent( QMouseEvent * e )
 
         case MouseEdit:      // ? update graphics ?
             break;
+
+        case MouseTextSelect:
+            if ( leftButton && d->textSelecting )
+            {
+                // scroll while dragging outside of the viewport
+                int x = e->x(), y = e->y();
+                QPoint v;
+                if ( x < contentsX() ) v.setX( x - contentsX() );
+                else if ( x > contentsX() + visibleWidth() ) v.setX( x - contentsX() - visibleWidth() );
+                if ( y < contentsY() ) v.setY( y - contentsY() );
+                else if ( y > contentsY() + visibleHeight() ) v.setY( y - contentsY() - visibleHeight() );
+                d->dragScrollVector = v;
+                if ( v != QPoint( 0, 0 ) )
+                {
+                    if ( !d->dragScrollTimer.isActive() )
+                        d->dragScrollTimer.start( 100 );
+                }
+                else
+                    d->dragScrollTimer.stop();
+
+                int page;
+                uint pos;
+                if ( textPositionAt( x, y, page, pos ) )
+                    setTextSelection( d->selAnchorPage, d->selAnchorPos, page, pos );
+            }
+            else if ( !leftButton )
+                updateCursor( e->pos() );
+            break;
     }
 }
 
@@ -950,6 +1028,21 @@ void PageView::contentsMousePressEvent( QMouseEvent * e )
             break;
 
         case MouseEdit:     // ..to do..
+            break;
+
+        case MouseTextSelect:
+            if ( leftButton )
+            {
+                int page;
+                uint pos;
+                clearTextSelection();
+                if ( textPositionAt( e->x(), e->y(), page, pos ) )
+                {
+                    d->textSelecting = true;
+                    d->selAnchorPage = d->selCursorPage = page;
+                    d->selAnchorPos = d->selCursorPos = pos;
+                }
+            }
             break;
     }
 }
@@ -1224,10 +1317,88 @@ void PageView::contentsMouseReleaseEvent( QMouseEvent * e )
 
         case MouseEdit:      // ? apply [tool] ?
             break;
+
+        case MouseTextSelect:
+            if ( leftButton && d->textSelecting )
+            {
+                d->textSelecting = false;
+                // the X11 selection gets the text, as in any text widget
+                if ( d->hasTextSelection && d->document->isAllowed( KPDFDocument::AllowCopy ) )
+                {
+                    QClipboard *cb = QApplication::clipboard();
+                    if ( cb->supportsSelection() )
+                        cb->setText( selectedText(), QClipboard::Selection );
+                }
+            }
+            else if ( rightButton )
+            {
+                if ( d->hasTextSelection )
+                    textSelectionMenu( e->globalPos() );
+                else
+                {
+                    PageViewItem * pageItem = pickItemOnPoint( e->x(), e->y() );
+                    emit rightClick( pageItem ? pageItem->page() : 0, e->globalPos() );
+                }
+            }
+            break;
     }
 
     // reset mouse press / 'drag start' position
     d->mousePressPos = QPoint();
+}
+
+void PageView::contentsMouseDoubleClickEvent( QMouseEvent * e )
+{
+    // in the text tool, a double click selects a word
+    if ( d->mouseMode != MouseTextSelect || !( e->button() & LeftButton ) || d->items.isEmpty() )
+    {
+        QScrollView::contentsMouseDoubleClickEvent( e );
+        return;
+    }
+    int page;
+    uint pos;
+    if ( !textPositionAt( e->x(), e->y(), page, pos ) )
+        return;
+    const KPDFTextPage * tp = d->document->page( page )->textPage();
+    if ( !tp || !tp->length() )
+        return;
+    const QString & text = tp->text();
+    uint i = QMIN( pos, tp->length() - 1 );
+    if ( text[i].isSpace() && i > 0 )
+        --i;
+    if ( text[i].isSpace() )
+        return;
+    uint from = i, to = i + 1;
+    while ( from > 0 && !text[from - 1].isSpace() )
+        --from;
+    while ( to < tp->length() && !text[to].isSpace() )
+        ++to;
+    d->textSelecting = false;
+    setTextSelection( page, from, page, to );
+    if ( d->document->isAllowed( KPDFDocument::AllowCopy ) )
+    {
+        QClipboard *cb = QApplication::clipboard();
+        if ( cb->supportsSelection() )
+            cb->setText( selectedText(), QClipboard::Selection );
+    }
+}
+
+bool PageView::event( QEvent * e )
+{
+    // Ctrl+C and Ctrl+A are ours when there is something to copy or select,
+    // also when the host (Konqueror) has shortcuts with these keys
+    if ( e->type() == QEvent::AccelOverride )
+    {
+        QKeyEvent * k = static_cast< QKeyEvent * >( e );
+        if ( ( k->state() & ControlButton ) && !( k->state() & ( AltButton | ShiftButton ) ) &&
+             ( ( k->key() == Key_C && d->hasTextSelection ) ||
+               ( k->key() == Key_A && !d->items.isEmpty() ) ) )
+        {
+            k->accept();
+            return true;
+        }
+    }
+    return QScrollView::event( e );
 }
 
 void PageView::wheelEvent( QWheelEvent *e )
@@ -1619,6 +1790,11 @@ void PageView::updateCursor( const QPoint &p )
         else
             setCursor( KCursor::arrowCursor() );
     }
+    else if ( pageItem && d->mouseMode == MouseTextSelect )
+    {
+        d->mouseOnRect = false;
+        setCursor( KCursor::ibeamCursor() );
+    }
     else
     {
         // if there's no page over the cursor and we were showing the pointingHandCursor
@@ -1626,6 +1802,205 @@ void PageView::updateCursor( const QPoint &p )
         d->mouseOnRect = false;
         setCursor( KCursor::arrowCursor() );
     }
+}
+
+bool PageView::hasTextSelection() const
+{
+    return d->hasTextSelection;
+}
+
+bool PageView::textPositionAt( int x, int y, int & page, uint & pos )
+{
+    // the visible page nearest to the point, vertical distance first
+    PageViewItem * best = 0;
+    int bestDist = 0;
+    QValueList< PageViewItem * >::iterator iIt = d->visibleItems.begin(), iEnd = d->visibleItems.end();
+    for ( ; iIt != iEnd; ++iIt )
+    {
+        const QRect & g = (*iIt)->geometry();
+        int dy = y < g.top() ? g.top() - y : ( y > g.bottom() ? y - g.bottom() : 0 );
+        int dx = x < g.left() ? g.left() - x : ( x > g.right() ? x - g.right() : 0 );
+        int dist = 4 * dy + dx;
+        if ( !best || dist < bestDist )
+        {
+            best = *iIt;
+            bestDist = dist;
+        }
+    }
+    if ( !best || best->width() <= 0 || best->height() <= 0 )
+        return false;
+
+    const KPDFPage * kp = best->page();
+    if ( !kp->hasSearchPage() )
+        d->document->requestTextPage( kp->number() );
+    const KPDFTextPage * tp = kp->textPage();
+    if ( !tp )
+        return false;
+
+    const QRect & g = best->geometry();
+    double nx = (double)( x - g.left() ) / (double)g.width(),
+           ny = (double)( y - g.top() ) / (double)g.height();
+    page = kp->number();
+    if ( ny < 0 )
+        pos = 0;
+    else if ( ny > 1 )
+        pos = tp->length();
+    else
+        pos = tp->cursorAt( nx, ny );
+    return true;
+}
+
+void PageView::setTextSelection( int anchorPage, uint anchorPos, int cursorPage, uint cursorPos )
+{
+    bool had = d->hasTextSelection;
+    d->selAnchorPage = anchorPage;
+    d->selAnchorPos = anchorPos;
+    d->selCursorPage = cursorPage;
+    d->selCursorPos = cursorPos;
+    d->hasTextSelection = anchorPage >= 0 && cursorPage >= 0 &&
+                          !( anchorPage == cursorPage && anchorPos == cursorPos );
+    updateTextSelectionHighlights();
+    if ( had != d->hasTextSelection )
+        emit textSelectionChanged( d->hasTextSelection );
+}
+
+void PageView::clearTextSelection()
+{
+    bool had = d->hasTextSelection;
+    d->textSelecting = false;
+    d->hasTextSelection = false;
+    updateTextSelectionHighlights();
+    if ( had )
+        emit textSelectionChanged( false );
+}
+
+void PageView::selectAllText()
+{
+    uint pages = d->document->pages();
+    if ( !pages )
+        return;
+    // the end position is clamped to the length of the last page's text
+    d->textSelecting = false;
+    setTextSelection( 0, 0, pages - 1, (uint)-1 );
+}
+
+void PageView::updateTextSelectionHighlights()
+{
+    // the pages to look at: the visible ones and those showing a selection
+    QMap< int, bool > pages;
+    QValueList< PageViewItem * >::iterator iIt = d->visibleItems.begin(), iEnd = d->visibleItems.end();
+    for ( ; iIt != iEnd; ++iIt )
+        pages[ (*iIt)->pageNumber() ] = true;
+    QMap< int, QPair< uint, uint > >::iterator sIt = d->selShown.begin(), sEnd = d->selShown.end();
+    for ( ; sIt != sEnd; ++sIt )
+        pages[ sIt.key() ] = true;
+
+    int lowPage = d->selAnchorPage, highPage = d->selCursorPage;
+    uint lowPos = d->selAnchorPos, highPos = d->selCursorPos;
+    if ( lowPage > highPage || ( lowPage == highPage && lowPos > highPos ) )
+    {
+        qSwap( lowPage, highPage );
+        qSwap( lowPos, highPos );
+    }
+
+    // highlight colour: the selection colour over white, half way
+    QColor h = palette().active().highlight();
+    QColor color( ( h.red() + 255 ) / 2, ( h.green() + 255 ) / 2, ( h.blue() + 255 ) / 2 );
+
+    QMap< int, bool >::iterator pIt = pages.begin(), pEnd = pages.end();
+    for ( ; pIt != pEnd; ++pIt )
+    {
+        int p = pIt.key();
+        if ( !d->hasTextSelection || p < lowPage || p > highPage )
+        {
+            if ( d->selShown.contains( p ) )
+            {
+                d->document->setTextSelectionHighlight( p, QValueList< NormalizedRect >(), color );
+                d->selShown.remove( p );
+            }
+            continue;
+        }
+        const KPDFPage * kp = d->document->page( p );
+        if ( !kp )
+            continue;
+        if ( !kp->hasSearchPage() )
+            d->document->requestTextPage( p );
+        const KPDFTextPage * tp = kp->textPage();
+        if ( !tp )
+            continue;
+        uint from = p == lowPage ? lowPos : 0,
+             to = p == highPage ? QMIN( highPos, tp->length() ) : tp->length();
+        QPair< uint, uint > range( from, to );
+        if ( d->selShown.contains( p ) && d->selShown[ p ] == range )
+            continue;
+        d->document->setTextSelectionHighlight( p, tp->selectionRects( from, to ), color );
+        d->selShown[ p ] = range;
+    }
+}
+
+QString PageView::selectedText() const
+{
+    if ( !d->hasTextSelection )
+        return QString::null;
+    int lowPage = d->selAnchorPage, highPage = d->selCursorPage;
+    uint lowPos = d->selAnchorPos, highPos = d->selCursorPos;
+    if ( lowPage > highPage || ( lowPage == highPage && lowPos > highPos ) )
+    {
+        qSwap( lowPage, highPage );
+        qSwap( lowPos, highPos );
+    }
+    QString text;
+    for ( int p = lowPage; p <= highPage; ++p )
+    {
+        const KPDFPage * kp = d->document->page( p );
+        if ( !kp )
+            continue;
+        if ( !kp->hasSearchPage() )
+            d->document->requestTextPage( p );
+        const KPDFTextPage * tp = kp->textPage();
+        if ( !tp )
+            continue;
+        uint from = p == lowPage ? lowPos : 0,
+             to = p == highPage ? QMIN( highPos, tp->length() ) : tp->length();
+        QString part = tp->text( from, to );
+        if ( !text.isEmpty() && !part.isEmpty() && !text.endsWith( "\n" ) )
+            text += '\n';
+        text += part;
+    }
+    return text;
+}
+
+void PageView::copyTextSelection()
+{
+    if ( !d->hasTextSelection )
+        return;
+    if ( !d->document->isAllowed( KPDFDocument::AllowCopy ) )
+    {
+        d->messageWindow->display( i18n( "Copy forbidden by DRM" ), PageViewMessage::Warning );
+        return;
+    }
+    QApplication::setOverrideCursor( waitCursor );
+    QString text = selectedText();
+    QApplication::restoreOverrideCursor();
+    QClipboard *cb = QApplication::clipboard();
+    cb->setText( text, QClipboard::Clipboard );
+    d->messageWindow->display( i18n( "1 character copied to the clipboard.",
+                                     "%n characters copied to the clipboard.", text.length() ) );
+}
+
+void PageView::textSelectionMenu( const QPoint & globalPos )
+{
+    KPopupMenu menu( this );
+    menu.insertTitle( i18n( "Text" ) );
+    menu.insertItem( SmallIcon("editcopy"), i18n( "&Copy" ), 1 );
+    if ( !d->document->isAllowed( KPDFDocument::AllowCopy ) )
+        menu.setItemEnabled( 1, false );
+    menu.insertItem( i18n( "Select &All" ), 2 );
+    int choice = menu.exec( globalPos );
+    if ( choice == 1 )
+        copyTextSelection();
+    else if ( choice == 2 )
+        selectAllText();
 }
 
 void PageView::doTypeAheadSearch()
@@ -1926,6 +2301,10 @@ void PageView::slotRequestVisiblePixmaps( int newLeft, int newTop )
     if ( !requestedPixmaps.isEmpty() )
         d->document->requestPixmaps( requestedPixmaps );
 
+    // pages that became visible show their part of the text selection
+    if ( d->hasTextSelection )
+        updateTextSelectionHighlights();
+
     // if this functions was invoked by viewport events, send update to document
     if ( isEvent && nearPageNumber != -1 )
     {
@@ -1993,6 +2372,14 @@ void PageView::slotDragScroll()
 {
     scrollBy(d->dragScrollVector.x(), d->dragScrollVector.y());
     QPoint p = viewportToContents( mapFromGlobal( QCursor::pos() ) );
+    if ( d->textSelecting )
+    {
+        int page;
+        uint pos;
+        if ( textPositionAt( p.x(), p.y(), page, pos ) )
+            setTextSelection( d->selAnchorPage, d->selAnchorPos, page, pos );
+        return;
+    }
     selectionEndPoint( p.x(), p.y() );
 }
 
@@ -2083,6 +2470,12 @@ void PageView::slotSetMouseSelect()
 {
     d->mouseMode = MouseSelect;
     d->messageWindow->display( i18n( "Draw a rectangle around the text/graphics to copy." ), PageViewMessage::Info, -1 );
+}
+
+void PageView::slotSetMouseTextSelect()
+{
+    d->mouseMode = MouseTextSelect;
+    d->messageWindow->display( i18n( "Drag over the text to select it; double click selects a word." ), PageViewMessage::Info, 2000 );
 }
 
 void PageView::slotSetMouseDraw()

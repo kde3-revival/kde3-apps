@@ -49,7 +49,7 @@ class PageView : public QScrollView, public DocumentObserver
         // Zoom mode ( last 4 are internally used only! )
         enum ZoomMode { ZoomFixed, ZoomFitWidth, ZoomFitPage, ZoomFitText,
                         ZoomIn, ZoomOut, ZoomRefreshCurrent };
-        enum MouseMode { MouseNormal, MouseZoom, MouseSelect, MouseEdit };
+        enum MouseMode { MouseNormal, MouseZoom, MouseSelect, MouseEdit, MouseTextSelect };
 
         // create actions that interact with this widget
         void setupActions( KActionCollection * collection );
@@ -68,9 +68,21 @@ class PageView : public QScrollView, public DocumentObserver
 
         void showText( const QString &text, int ms );
 
+        // text selection
+        bool hasTextSelection() const;
+        QString selectedText() const;
+
+    public slots:
+        // copy the selected text to the clipboard
+        void copyTextSelection();
+        // select the text of the whole document
+        void selectAllText();
+        void clearTextSelection();
+
     signals:
         void urlDropped( const KURL& );
         void rightClick( const KPDFPage *, const QPoint & );
+        void textSelectionChanged( bool hasSelection );
 
     protected:
         // main draw loop, draws pageViews on viewport
@@ -83,6 +95,8 @@ class PageView : public QScrollView, public DocumentObserver
         void contentsMouseMoveEvent( QMouseEvent* );
         void contentsMousePressEvent( QMouseEvent* );
         void contentsMouseReleaseEvent( QMouseEvent* );
+        void contentsMouseDoubleClickEvent( QMouseEvent* );
+        bool event( QEvent* );
         void wheelEvent( QWheelEvent* );
 
         // drag and drop related events
@@ -108,6 +122,12 @@ class PageView : public QScrollView, public DocumentObserver
         void updateCursor( const QPoint &p );
         // does the type ahead search
         void doTypeAheadSearch();
+        // text selection: the page and cursor position nearest to a point
+        // of the contents, the selection from anchor to cursor, its highlights
+        bool textPositionAt( int x, int y, int & page, uint & pos );
+        void setTextSelection( int anchorPage, uint anchorPos, int cursorPage, uint cursorPos );
+        void updateTextSelectionHighlights();
+        void textSelectionMenu( const QPoint & globalPos );
 
         // don't want to expose classes in here
         class PageViewPrivate * d;
@@ -141,6 +161,7 @@ class PageView : public QScrollView, public DocumentObserver
         void slotSetMouseZoom();
         void slotSetMouseSelect();
         void slotSetMouseDraw();
+        void slotSetMouseTextSelect();
         void slotScrollUp();
         void slotScrollDown();
 };

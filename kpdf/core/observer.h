@@ -22,6 +22,9 @@
 #define TOC_ID 5
 #define MINIBAR_ID 6
 
+/** ID of the highlights of the text selection (search IDs are 1..3) **/
+#define TEXTSELECTION_ID 10
+
 /** PRIORITIES for requests. Globally defined here. **/
 #define PAGEVIEW_PRIO 1
 #define PAGEVIEW_PRELOAD_PRIO 4

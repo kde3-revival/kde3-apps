@@ -936,6 +936,23 @@ void KPDFDocument::toggleBookmark( int n )
     }
 }
 
+void KPDFDocument::setTextSelectionHighlight( int page, const QValueList< NormalizedRect > & rects, const QColor & color )
+{
+    if ( page < 0 || page >= (int)pages_vector.count() )
+        return;
+    KPDFPage * kp = pages_vector[ page ];
+    bool had = kp->hasHighlights( TEXTSELECTION_ID );
+    kp->deleteHighlights( TEXTSELECTION_ID );
+    QValueList< NormalizedRect >::const_iterator it = rects.begin(), end = rects.end();
+    for ( ; it != end; ++it )
+    {
+        NormalizedRect * r = new NormalizedRect( *it );
+        kp->setHighlight( TEXTSELECTION_ID, r, color );
+    }
+    if ( had || !rects.isEmpty() )
+        foreachObserver( notifyPageChanged( page, DocumentObserver::Highlights ) );
+}
+
 void KPDFDocument::processLink( const KPDFLink * link )
 {
     if ( !link )

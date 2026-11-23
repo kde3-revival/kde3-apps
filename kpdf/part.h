@@ -131,6 +131,9 @@ public slots:
 	void saveDocumentRestoreInfo(KConfig* config);
 	void slotFileDirty( const QString& );
 	void slotDoFileDirty();
+	// copy the selected text (Edit menu, browser extension)
+	void slotCopy();
+	void slotTextSelectionChanged(bool hasSelection);
 
 private:
 	void doPrint( KPrinter& printer );
@@ -181,6 +184,8 @@ private:
 	KAction *m_printPreview;
 	KAction *m_showProperties;
 	KAction *m_showPresentation;
+	KAction *m_copy;
+	KAction *m_selectAll;
 	KToggleAction* m_showMenuBarAction;
 	KToggleAction* m_showLeftPanel;
 	KToggleAction* m_showFullScreenAction;
@@ -200,6 +205,10 @@ public:
 public slots:
 	// Automatically detected by the host.
 	void print();
+	void copy();
+
+	// the host enables its Copy action with the text selection
+	void setCopyEnabled(bool enable);
 };
 
 }

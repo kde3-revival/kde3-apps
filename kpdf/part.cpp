@@ -288,6 +288,21 @@ Part::Part(QWidget *parentWidget, const char *widgetName,
 	m_showPresentation = new KAction( i18n("P&resentation"), "kpresenter_kpr", "Ctrl+Shift+P", this, SLOT(slotShowPresentation()), ac, "presentation");
 	m_showPresentation->setEnabled( false );
 
+	// Copy and Select All of the text selection: in the Edit menu of the
+	// kpdf shell; hosting browsers have their own Copy action, which the
+	// browser extension serves, and the page view takes Ctrl+C and Ctrl+A
+	// itself.
+	m_copy = 0;
+	m_selectAll = 0;
+	if ( parent && parent->inherits( "KPDF::Shell" ) )
+	{
+		m_copy = KStdAction::copy( this, SLOT( slotCopy() ), ac, "edit_copy" );
+		m_copy->setEnabled( false );
+		m_selectAll = KStdAction::selectAll( m_pageView, SLOT( selectAllText() ), ac, "edit_select_all" );
+		m_selectAll->setEnabled( false );
+	}
+	connect( m_pageView, SIGNAL( textSelectionChanged( bool ) ), this, SLOT( slotTextSelectionChanged( bool ) ) );
+
 	// attach the actions of the children widgets too
 	m_pageView->setupActions( ac );
 
@@ -633,6 +648,8 @@ void Part::close()
 void Part::updateViewActions()
 {
     bool opened = m_document->pages() > 0;
+    if ( m_selectAll )
+        m_selectAll->setEnabled( opened );
     if ( opened )
     {
         bool atBegin = m_document->currentPage() < 1;
@@ -1054,6 +1071,19 @@ void Part::doPrint(KPrinter &printer)
     }
 }
 
+void Part::slotCopy()
+{
+	if ( m_pageView )
+		m_pageView->copyTextSelection();
+}
+
+void Part::slotTextSelectionChanged(bool hasSelection)
+{
+	if ( m_copy )
+		m_copy->setEnabled( hasSelection );
+	m_bExtension->setCopyEnabled( hasSelection );
+}
+
 void Part::restoreDocument(KConfig* config)
 {
   KURL url ( config->readPathEntry( "URL" ) );
@@ -1084,6 +1114,16 @@ BrowserExtension::BrowserExtension(Part* parent)
 void BrowserExtension::print()
 {
 	static_cast<Part*>(parent())->slotPrint();
+}
+
+void BrowserExtension::copy()
+{
+	static_cast<Part*>(parent())->slotCopy();
+}
+
+void BrowserExtension::setCopyEnabled(bool enable)
+{
+	emit enableAction("copy", enable);
 }
 
 #include "part.moc"

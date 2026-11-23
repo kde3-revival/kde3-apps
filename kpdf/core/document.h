@@ -12,6 +12,7 @@
 #define _KPDF_DOCUMENT_H_
 
 #include <qobject.h>
+#include <qvaluelist.h>
 #include <qvaluevector.h>
 #include <qstring.h>
 #include <qdom.h>
@@ -20,6 +21,8 @@
 
 class KPDFPage;
 class KPDFLink;
+class NormalizedRect;
+class QColor;
 class DocumentObserver;
 class DocumentViewport;
 class DocumentInfo;
@@ -102,6 +105,8 @@ class KPDFDocument : public QObject
         void resetSearch( int searchID );
         bool continueLastSearch();
         void toggleBookmark( int page );
+        // replace the text selection highlights of a page
+        void setTextSelectionHighlight( int page, const QValueList< NormalizedRect > & rects, const QColor & color );
         void processLink( const KPDFLink * link );
         bool print( KPrinter &printer );
 
