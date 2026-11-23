@@ -20,15 +20,17 @@
 
 #include <kpanelapplet.h>
 #include <dcopref.h>
+#include <qdatetime.h>
 
 #include "weatherIface.h"
 
 class QTimer;
 class dockwidget;
-class reportView;
+class ForecastPopup;
 class KPopupMenu;
 class WeatherService_stub;
 class QPalette;
+class KCMultiDialog;
 
 class kweather : public KPanelApplet, public weatherIface
 {
@@ -56,7 +58,7 @@ protected slots:
     void doReport();
     void timeout();
     void slotPrefsAccepted();
-    void slotReportFinished();
+    void slotPopupHidden();
     void slotUpdateNow();
 
 private: // Private methods
@@ -66,25 +68,28 @@ private: // Private methods
     void savePrefs();
     void showWeather();
     void writeLogEntry();
+    void checkRain();
     void mousePressEvent(QMouseEvent *e);
     
     bool attach();
     
     QString reportLocation;
     QString fileName;
-    QString metarData;
     bool logOn;
+    bool mRainAlert;
+    bool mRainExpected;
     bool mFirstRun;
     int mViewMode;
     QTimer *timeOut;
     dockwidget *dockWidget;
-    reportView *mReport;
+    ForecastPopup *mPopup;
+    QTime mPopupHidden;
     DCOPClient *mClient;
     //DCOPRef *mWeatherService;
     KPopupMenu *mContextMenu;
     WeatherService_stub *mWeatherService;
     KCMultiDialog *settingsDialog;
-    QColor mTextColor;
+    QColor mTextColor;      // invalid: the color of the panel
 };
 
 #endif

@@ -59,7 +59,7 @@ private:
     int m_mode;
     QString m_locationCode;
     QFont m_font;
-    QPixmap m_icon;
+    QString m_iconName;
     WeatherButton *m_button;
     QLabel *m_lblTemp;
     QLabel *m_lblWind;

@@ -2,6 +2,7 @@
    Copyright (C) 2001-2004 Ian Geiser <geiseri@kde.org>
    Copyright (C) 2002-2004 Nadeem Hasan <nhasan@kde.org>
    Copyright (C) 2003-2004 John Ratke
+   Copyright (C) 2026 The KDE3 revival authors (Open-Meteo)
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -28,16 +29,14 @@
 
 #include "weatherlib.h"
 #include "weatherservice.h"
-#include "stationdatabase.h"
-#include "sun.h"
+#include "weathericons.h"
+#include "weathermodels.h"
 
 WeatherService::WeatherService(QObject *parent, const char *name) : QObject (parent, name),  DCOPObject("WeatherService")
 {
 	kdDebug(12006) << "Starting new service... " << endl;
 
-	stationDB = new StationDatabase();
-
-	m_weatherLib = new WeatherLib(stationDB, this, "WeatherLib");
+	m_weatherLib = new WeatherLib(this, "WeatherLib");
 	connect(m_weatherLib, SIGNAL(fileUpdating( const QString&)),
 			SLOT(updating( const QString&)));
 	connect(m_weatherLib, SIGNAL(fileUpdate( const QString&)),
@@ -45,8 +44,9 @@ WeatherService::WeatherService(QObject *parent, const char *name) : QObject (par
 	connect(m_weatherLib, SIGNAL(stationRemoved(const QString&)),
 			SLOT(slotStationRemoved(const QString&)));
 
-	KConfig *conf = kapp->config();
+	reloadSettings();
 
+	KConfig *conf = kapp->config();
 	conf->setGroup("WEATHERSTATIONS");
 	QStringList stations =conf->readListEntry("stations");
         QStringList::Iterator it = stations.begin();
@@ -60,7 +60,19 @@ WeatherService::~WeatherService()
 	// Don't need to call saveSettings() because WeatherService::exit
         // already does that. Plus it wouldn't work here anyway because
         // we can't get the config after calling kapp->quit();
-	delete stationDB;
+}
+
+void WeatherService::reloadSettings()
+{
+	KConfig *conf = kapp->config();
+	conf->reparseConfiguration();
+	conf->setGroup("Units");
+	bool metric = KGlobal::locale()->measureSystem() == KLocale::Metric;
+	m_weatherLib->setUnits(
+		conf->readEntry("temperature", metric ? "celsius" : "fahrenheit"),
+		conf->readEntry("wind", metric ? "kmh" : "mph"),
+		conf->readEntry("precipitation", metric ? "mm" : "inch"),
+		conf->readEntry("pressure", metric ? "hPa" : "inHg"));
 }
 
 void WeatherService::updated(const QString &stationID)
@@ -98,6 +110,11 @@ QString WeatherService::temperature(const QString &stationID)
 	return m_weatherLib->temperature(stationID);
 }
 
+QString WeatherService::apparentTemperature(const QString &stationID)
+{
+	return m_weatherLib->apparentTemperature(stationID);
+}
+
 QString WeatherService::dewPoint(const QString &stationID)
 {
 	return m_weatherLib->dewPoint(stationID);
@@ -128,6 +145,11 @@ QString WeatherService::pressure(const QString &stationID)
 	return m_weatherLib->pressure(stationID);
 }
 
+QString WeatherService::precipitation(const QString &stationID)
+{
+	return m_weatherLib->precipitation(stationID);
+}
+
 QPixmap WeatherService::currentIcon(const QString &stationID)
 {
     return icon( stationID );
@@ -136,9 +158,7 @@ QPixmap WeatherService::currentIcon(const QString &stationID)
 QPixmap WeatherService::icon(const QString &stationID)
 {
 	kdDebug(12006) << "Get the current weather icon.." << endl;
-	QString icon  = iconFileName(stationID);
-	QPixmap theIcon = QPixmap(icon);
-	return theIcon;
+	return WeatherIcons::load(m_weatherLib->iconName(stationID), 48);
 }
 
 QString WeatherService::currentIconString(const QString &stationID)
@@ -148,19 +168,12 @@ QString WeatherService::currentIconString(const QString &stationID)
 
 QString WeatherService::iconFileName(const QString &stationID)
 {
-	QString icon  = m_weatherLib->iconName(stationID);
-	icon = locate( "data", "kweather/" + icon + ".png" );
-	return icon;
+	return WeatherIcons::fallbackFile(m_weatherLib->iconName(stationID));
 }
 
 QString WeatherService::date(const QString &stationID)
 {
 	return m_weatherLib->date(stationID);
-}
-
-QString WeatherService::visibility(const QString &stationID)
-{
-	return m_weatherLib->visibility(stationID);
 }
 
 QStringList WeatherService::cover(const QString &stationID)
@@ -173,9 +186,29 @@ QStringList WeatherService::weather(const QString &stationID)
 	return m_weatherLib->weather(stationID);
 }
 
-bool WeatherService::stationNeedsMaintenance(const QString &stationID)
+bool WeatherService::stationNeedsMaintenance(const QString &)
 {
-	return m_weatherLib->stationNeedsMaintenance(stationID);
+	return false;
+}
+
+QString WeatherService::error(const QString &stationID)
+{
+	return m_weatherLib->error(stationID);
+}
+
+QStringList WeatherService::hourlyForecast(const QString &stationID, int hours)
+{
+	return m_weatherLib->hourly(stationID, hours);
+}
+
+QStringList WeatherService::dailyForecast(const QString &stationID)
+{
+	return m_weatherLib->daily(stationID);
+}
+
+QString WeatherService::rainNextHour(const QString &stationID)
+{
+	return m_weatherLib->rainNextHour(stationID);
 }
 
 void WeatherService::update(const QString &stationID)
@@ -191,6 +224,8 @@ void WeatherService::forceUpdate(const QString &stationID)
 void WeatherService::removeStation(const QString &stationID)
 {
 	m_weatherLib->remove(stationID);
+	KConfig *conf = kapp->config();
+	conf->deleteGroup("Location " + stationID);
 	saveSettings();
 }
 
@@ -198,6 +233,16 @@ void WeatherService::addStation(const QString &stationID)
 {
 	m_weatherLib->update(stationID);
 	saveSettings();
+}
+
+void WeatherService::addLocation(const QString &stationID, const QString &name,
+                                 const QString &country)
+{
+	KConfig *conf = kapp->config();
+	conf->setGroup("Location " + stationID);
+	conf->writeEntry("name", name);
+	conf->writeEntry("country", country);
+	addStation(stationID);
 }
 
 void WeatherService::exit()
@@ -221,123 +266,70 @@ void WeatherService::saveSettings()
 
 QString WeatherService::stationName(const QString &stationID)
 {
-	if ( stationDB )
-	{
-		QString upperStationID = stationID.upper();
-		return stationDB->stationNameFromID(upperStationID);
-	}
-	else
-		return stationID;
-}
-QString WeatherService::stationCode( const QString &stationName )
-{
-	if ( stationDB )
-	{
-		return stationDB->stationIDfromName(stationName);
-	}
-	else
-		return stationName;
+	KConfig *conf = kapp->config();
+	conf->setGroup("Location " + stationID);
+	QString name = conf->readEntry("name");
+	if (!name.isEmpty())
+		return name;
+	return latitude(stationID) + ", " + longitude(stationID);
 }
 
 QString WeatherService::stationCountry(const QString &stationID)
 {
-
-	if ( stationDB )
-	{
-		QString upperStationID = stationID.upper();
-		return stationDB->stationCountryFromID(upperStationID);
-	}
-	else
-		return stationID;
+	KConfig *conf = kapp->config();
+	conf->setGroup("Location " + stationID);
+	return conf->readEntry("country");
 }
+
 QString WeatherService::longitude(const QString &stationID)
 {
-	if ( stationDB )
-	{
-		QString upperStationID = stationID.upper();
-		return stationDB->stationLongitudeFromID(upperStationID);
-	}
-	else
-		return "None";
+	double lat, lon;
+	QString m;
+	if (!WeatherModels::parseLocationId(stationID, &lat, &lon, &m))
+		return i18n("Unknown Station");
+	return KGlobal::locale()->formatNumber(lon, 4);
 }
+
 QString WeatherService::latitude(const QString &stationID)
 {
-	if ( stationDB )
-	{
-		QString upperStationID = stationID.upper();
-		return stationDB->stationLatitudeFromID(upperStationID);
-	}
-	else
-		return "None";
+	double lat, lon;
+	QString m;
+	if (!WeatherModels::parseLocationId(stationID, &lat, &lon, &m))
+		return i18n("Unknown Station");
+	return KGlobal::locale()->formatNumber(lat, 4);
 }
 
-QStringList WeatherService::findStations(float /*lon*/, float /*lat*/)
+QString WeatherService::model(const QString &stationID)
 {
-	QStringList stationList;
-	stationList << "KMKE" << "KPNE" << "KTPW";
-	return stationList;
+	double lat, lon;
+	QString m;
+	if (!WeatherModels::parseLocationId(stationID, &lat, &lon, &m))
+		return QString::null;
+	return m;
 }
 
-QString WeatherService::getTime(const QString &stationID, TimeType timeType)
+QString WeatherService::modelName(const QString &stationID)
 {
-	QString upperStationID = stationID.upper();
+	return WeatherModels::displayName(model(stationID));
+}
 
-	QString latitude  = stationDB->stationLatitudeFromID(upperStationID);
-	QString longitude = stationDB->stationLongitudeFromID(upperStationID);
-
-	if ( latitude.compare(  i18n("Unknown Station" ) ) == 0  ||
-	     longitude.compare( i18n("Unknown Station" ) ) == 0 )
-	{
-		return i18n( "Unknown Station" );
-	}
-	else
-	{
-		Sun theSun( latitude, longitude );
-		
-		QTime time;
-		switch ( timeType )
-		{
-			case RISE:
-				time = theSun.computeRiseTime();
-				break;
-			case SET:
-				time = theSun.computeSetTime();
-				break;
-			case CIVIL_START:
-				time = theSun.computeCivilTwilightStart();
-				break;
-			case CIVIL_END:
-				time = theSun.computeCivilTwilightEnd();
-				break;
-		}
-
-		kdDebug(12006) << "station, lat, lon, time: " << upperStationID << " " <<
-			latitude << " " << longitude << " " << time << endl;
-
-		return KGlobal::locale()->formatTime(time);
-	}
+QStringList WeatherService::models()
+{
+	QStringList list;
+	QStringList names = WeatherModels::models();
+	for (QStringList::ConstIterator it = names.begin(); it != names.end(); ++it)
+		list.append(*it + '\t' + WeatherModels::displayName(*it));
+	return list;
 }
 
 QString WeatherService::sunRiseTime(const QString &stationID)
 {
-	return getTime(stationID, RISE);
+	return m_weatherLib->sunRise(stationID);
 }
 
 QString WeatherService::sunSetTime(const QString &stationID)
 {
-	return getTime(stationID, SET);
+	return m_weatherLib->sunSet(stationID);
 }
-
-QString WeatherService::civilTwilightStart(const QString &stationID)
-{
-	return getTime(stationID, CIVIL_START);
-}
-
-QString WeatherService::civilTwilightEnd(const QString &stationID)
-{
-	return getTime(stationID, CIVIL_END);
-}
-
-
 
 #include "weatherservice.moc"

@@ -4,6 +4,7 @@
     begin                : Wed Jul  5 23:09:02 CDT 2000
     copyright            : (C) 2000-2003 by Ian Reinhart Geiser
                          : (C) 2002-2003 Nadeem Hasan <nhasan@kde.org>
+                         : (C) 2026 The KDE3 revival authors (Open-Meteo)
     email                : geiseri@msoe.edu
  ***************************************************************************/
 
@@ -25,6 +26,8 @@
 #include <kmessagebox.h>
 #include <kpopupmenu.h>
 #include <kconfig.h>
+#include <kinstance.h>
+#include <knotifyclient.h>
 #include <ksettings/dialog.h>
 #include <ksettings/dispatcher.h>
 #include <dcopclient.h>
@@ -34,7 +37,7 @@
 #include <qpalette.h>
 
 #include "kweather.h"
-#include "reportview.h"
+#include "forecastpopup.h"
 #include "dockwidget.h"
 #include "weatherservice_stub.h"
 
@@ -52,8 +55,9 @@ extern "C"
 kweather::kweather(const QString& configFile, Type t, int actions,
         QWidget *parent, const char *name):
         KPanelApplet(configFile, t, actions, parent, name), weatherIface(),
-        mFirstRun( false ), mReport( 0 ), mClient( 0 ),
-        mContextMenu( 0 ), mWeatherService( 0 ), settingsDialog( 0 ), mTextColor(Qt::black)
+        mRainAlert( false ), mRainExpected( false ),
+        mFirstRun( false ), mPopup( 0 ), mClient( 0 ),
+        mContextMenu( 0 ), mWeatherService( 0 ), settingsDialog( 0 )
 {
     kdDebug(12004) << "Constructor " << endl;
     setObjId("weatherIface");
@@ -87,7 +91,7 @@ void kweather::initContextMenu()
 {
     mContextMenu = new KPopupMenu(this);
     mContextMenu->insertTitle(i18n("KWeather - %1").arg( reportLocation ), -1, 0);
-    mContextMenu->insertItem(SmallIcon("viewmag"), i18n("Show &Report"),
+    mContextMenu->insertItem(SmallIcon("viewmag"), i18n("Show &Forecast"),
         this, SLOT(doReport()), 0, -1, 1);
     mContextMenu->insertItem(SmallIcon("reload"), i18n("&Update Now"),
         this, SLOT(slotUpdateNow()), 0, -1, 2);
@@ -126,8 +130,9 @@ void kweather::initDCOP()
 /** about box */
 void kweather::about(){
     kdDebug(12004) << "Telling about" << endl;
-    KAboutData aboutData("KWeather", "KWeather", "2.1.0",
-            I18N_NOOP("Weather applet for the Kicker"), KAboutData::License_GPL_V2);
+    KAboutData aboutData("KWeather", "KWeather", "3.0.0",
+            I18N_NOOP("Weather applet for the Kicker"), KAboutData::License_GPL_V2,
+            0, I18N_NOOP("Weather data by Open-Meteo.com (CC BY 4.0)"));
     aboutData.addAuthor("Ian Reinhart Geiser", "", "geiseri@kde.org",
             "http://www.kde.org/");
     //aboutData.addAuthor("Nadeem Hasan",  "", "nhasan@nadmm.com", "http://www.nadmm.com/");
@@ -142,6 +147,8 @@ void kweather::about(){
             I18N_NOOP( "Great new weather icons" ), "mail@carlitus.net" );
     aboutData.addCredit( "John Ratke",
             I18N_NOOP( "Improvements and more code cleanups" ), "jratke@comcast.net" );
+    aboutData.addCredit( "The KDE3 revival authors",
+            I18N_NOOP( "Forecasts from Open-Meteo" ) );
 
     KAboutApplication about(&aboutData, this, 0);
     about.setProgramLogo( KGlobal::instance()->iconLoader()->iconPath( "kweather", -KIcon::SizeLarge ) );
@@ -174,31 +181,41 @@ void kweather::help()
     kapp->invokeHelp(QString::null, QString::fromLatin1("kweather"));
 }
 
-/** Display the current weather report. */
+/** Show the forecast popup. */
 void kweather::doReport()
 {
     if ( reportLocation.isEmpty() )
     {
-        // no station to display defined -> open settings dialog
+        // no location defined -> open settings dialog
         preferences();
         return;
     }
 
-    kdDebug(12004) << "Showing out the report" << endl;
-    if ( mReport == 0 )
+    if ( mPopup )
     {
-        mReport = new reportView(reportLocation);
-    
-        connect( mReport, SIGNAL( finished() ), SLOT( slotReportFinished() ) );
+        mPopup->close();
+        return;
     }
-    
-    mReport->show();
-    mReport->raise();
+    // the click on the applet that closed the popup must not open it again
+    if ( mPopupHidden.isValid() && mPopupHidden.elapsed() < 300 )
+        return;
+
+    if ( !mWeatherService )
+        initDCOP();
+    if ( !mWeatherService )
+        return;
+
+    kdDebug(12004) << "Showing the forecast" << endl;
+    mPopup = new ForecastPopup( mWeatherService, reportLocation, this );
+    connect( mPopup, SIGNAL( hidden() ), SLOT( slotPopupHidden() ) );
+    mPopup->popup( QRect( mapToGlobal( QPoint( 0, 0 ) ), size() ), popupDirection() );
 }
 
-void kweather::slotReportFinished(){
-    mReport->delayedDestruct();
-    mReport = 0;
+void kweather::slotPopupHidden()
+{
+    // WDestructiveClose deletes it
+    mPopup = 0;
+    mPopupHidden.start();
 }
 
 /** load the application */
@@ -214,10 +231,12 @@ void kweather::loadPrefs(){
     logOn = kcConfig->readBoolEntry("logging", false);
     fileName = kcConfig->readPathEntry("log_file_name");
     reportLocation = kcConfig->readEntry("report_location");
-    mViewMode = kcConfig->readNumEntry("smallview_mode", dockwidget::ShowAll);
+    mViewMode = kcConfig->readNumEntry("smallview_mode", dockwidget::ShowTempOnly);
+    mRainAlert = kcConfig->readBoolEntry("rain_alert", false);
 
-    static QColor black(Qt::black);
-    mTextColor = kcConfig->readColorEntry("textColor", &black);
+    mTextColor = QColor();
+    if ( kcConfig->hasKey("textColor") )
+        mTextColor = kcConfig->readColorEntry("textColor");
 }
 
 /** Save the application mPrefs. */
@@ -256,7 +275,7 @@ void kweather::writeLogEntry()
             QString date        = mWeatherService->date(reportLocation );
             QStringList weather = mWeatherService->weather(reportLocation );
             QStringList cover   = mWeatherService->cover(reportLocation );
-            QString visibility  = mWeatherService->visibility(reportLocation );
+            QString visibility; // METAR only
             logFileStream << date << ",";
             logFileStream << wind << ",";
             logFileStream << temperature << ",";
@@ -319,7 +338,25 @@ void kweather::refresh(QString stationID)
     {
         showWeather();
         writeLogEntry();
+        checkRain();
     }
+}
+
+void kweather::checkRain()
+{
+    QString rain;
+    if ( mRainAlert && mWeatherService )
+        rain = mWeatherService->rainNextHour( reportLocation );
+    // once per rain spell, not at every update
+    if ( !rain.isEmpty() && !mRainExpected )
+    {
+        static KInstance *instance = new KInstance( "kweather" );
+        KNotifyClient::Instance notifyInstance( instance );
+        KNotifyClient::event( winId(), "rain",
+                i18n( "Rain is expected in the next hour in %1: %2." )
+                .arg( mWeatherService->stationName( reportLocation ) ).arg( rain ) );
+    }
+    mRainExpected = !rain.isEmpty();
 }
 
 void kweather::slotPrefsAccepted()
@@ -377,7 +414,8 @@ void kweather::slotUpdateNow()
     if ( !mWeatherService )
          initDCOP();
 
-    mWeatherService->forceUpdate(reportLocation );
+    if ( mWeatherService && !reportLocation.isEmpty() )
+        mWeatherService->forceUpdate(reportLocation );
 }
 
 bool kweather::attach()
@@ -414,12 +452,16 @@ void kweather::resizeEvent(QResizeEvent *e)
 
 void kweather::setLabelColor()
 {
-    setPaletteForegroundColor(mTextColor);
+    if ( mTextColor.isValid() )
+        setPaletteForegroundColor(mTextColor);
+    else
+        unsetPalette();
 }
 
 void kweather::paletteChange(const QPalette &)
 {
-    setLabelColor();
+    if ( mTextColor.isValid() && paletteForegroundColor() != mTextColor )
+        setLabelColor();
 }
 
 #include "kweather.moc"

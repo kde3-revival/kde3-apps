@@ -1,0 +1,8 @@
+[!Global!]
+IconName=kweather
+Comment=KWeather
+
+[rain]
+Name=Rain expected
+Comment=Rain is expected in the next hour
+default_presentation=16

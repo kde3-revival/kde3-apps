@@ -19,12 +19,14 @@
 #include "dockwidget.h"
 #include "weatherbutton.h"
 #include "weatherservice_stub.h"
+#include "weathericons.h"
 
 #include <qtooltip.h>
 #include <qlayout.h>
 #include <qlabel.h>
 #include <qtimer.h>
 #include <qobjectlist.h>
+#include <qstylesheet.h>
 
 #include <kdebug.h>
 #include <kglobalsettings.h>
@@ -83,82 +85,62 @@ void dockwidget::showWeather()
     QString temp     = "?";
     QString wind     = "?";
     QString pressure = "?";
+    QString iconName = WeatherIcons::iconName( -1, true );
 
     if ( !m_locationCode.isEmpty() )
     {
-        temp     = m_weatherService->temperature( m_locationCode );
-        wind     = m_weatherService->wind( m_locationCode );
-        pressure = m_weatherService->pressure( m_locationCode );
-
-        QString dewPoint    = m_weatherService->dewPoint( m_locationCode);
-        QString relHumidity = m_weatherService->relativeHumidity( m_locationCode );
-        QString heatIndex   = m_weatherService->heatIndex( m_locationCode );
-        QString windChill   = m_weatherService->windChill( m_locationCode );
-        QString sunRiseTime = m_weatherService->sunRiseTime( m_locationCode );
-        QString sunSetTime  = m_weatherService->sunSetTime( m_locationCode );
-
-        tip += "<h3><center><nobr>" +
-               m_weatherService->stationName( m_locationCode ) + " (" +
-               m_weatherService->stationCountry( m_locationCode ) + ")</nobr></center></h3>";
-
-        if ( m_weatherService->currentIconString( m_locationCode ) == "dunno" )  // no data
-            tip += "<center><nobr>" + i18n("The network is currently offline...") + "</nobr></center>";
-
-        tip += QString("<br><table>"
-                "<tr><th><nobr>" + i18n( "Temperature:"   ) + "</nobr></th><td><nobr>%1</nobr></td>"
-                    "<th><nobr>" + i18n( "Dew Point:"     ) + "</nobr></th><td><nobr>%2</nobr></td></nobr></tr>"
-
-                "<tr><th><nobr>" + i18n( "Air Pressure:"  ) + "</nobr></th><td><nobr>%3</nobr></td>"
-                    "<th><nobr>" + i18n( "Rel. Humidity:" ) + "</nobr></th><td><nobr>%4</nobr></td></nobr></tr>"
-
-                "<tr><th><nobr>" + i18n( "Wind Speed:"    ) + "</nobr></th><td><nobr>%5</nobr></td>")
-                .arg(temp).arg(dewPoint).arg(pressure).arg(relHumidity).arg(wind);
-
-        if ( !heatIndex.isEmpty() )
-            tip += QString("<th><nobr>" + i18n( "Heat Index:" ) + "</nobr></th><td><nobr>%1</nobr></td>").arg(heatIndex);
-        else if ( !windChill.isEmpty() )
-            tip += QString("<th><nobr>" + i18n( "Wind Chill:" ) + "</nobr></th><td><nobr>%1</nobr></td>").arg(windChill);
-        else
-            tip += "<td>&nbsp;</td><td>&nbsp;</td>";
-        tip += "</tr>";
-
-        tip += QString("<tr><th><nobr>" + i18n( "Sunrise:" ) + "</nobr></th><td><nobr>%1</nobr></td>" +
-                           "<th><nobr>" + i18n( "Sunset:"  ) + "</nobr></th><td><nobr>%2</nobr></td>")
-                 .arg(sunRiseTime).arg(sunSetTime);
-
-        tip += "</tr></table>";
-
-        if ( m_weatherService->stationNeedsMaintenance( m_locationCode ) )
+        QString t = m_weatherService->temperature( m_locationCode );
+        if ( !t.isEmpty() )
         {
-            tip += "<br>" + i18n("Station reports that it needs maintenance\n"
-                                 "Please try again later");
+            temp     = t;
+            wind     = m_weatherService->wind( m_locationCode );
+            pressure = m_weatherService->pressure( m_locationCode );
+            iconName = m_weatherService->currentIconString( m_locationCode );
+        }
+
+        QString name    = m_weatherService->stationName( m_locationCode );
+        QString country = m_weatherService->stationCountry( m_locationCode );
+        tip += "<b><nobr>" + QStyleSheet::escape( country.isEmpty() ? name
+                : i18n( "place, country", "%1, %2" ).arg( name ).arg( country ) )
+             + "</nobr></b><br>";
+
+        if ( t.isEmpty() )
+        {
+            QString error = m_weatherService->error( m_locationCode );
+            tip += "<nobr>" + QStyleSheet::escape( error.isEmpty()
+                    ? i18n( "Waiting for the weather data..." )
+                    : i18n( "The weather could not be fetched: %1" ).arg( error ) )
+                 + "</nobr>";
+        }
+        else
+        {
+            QStringList weather = m_weatherService->weather( m_locationCode );
+            tip += "<nobr>" + QStyleSheet::escape( temp + ", " + weather.join( ", " ) ) + "</nobr>";
+            QString apparent = m_weatherService->apparentTemperature( m_locationCode );
+            if ( !apparent.isEmpty() && apparent != temp )
+                tip += "<br><nobr>" + QStyleSheet::escape( i18n( "Feels like %1" ).arg( apparent ) ) + "</nobr>";
+            if ( !wind.isEmpty() )
+                tip += "<br><nobr>" + QStyleSheet::escape( i18n( "Wind: %1" ).arg( wind ) ) + "</nobr>";
+            tip += "<br><nobr>" + QStyleSheet::escape( i18n( "Click for the forecast" ) ) + "</nobr>";
         }
     }
     else
     {
-        tip += i18n("Temperature: ") + temp + "<br>";
-        tip += i18n("\nWind: ") + wind + "<br>";
-        tip += i18n("\nAir pressure: ") + pressure + "<br>";
+        tip += i18n( "No location is set: click to choose one." );
     }
-
     tip += "</qt>";
-
-    // On null or empty location code, or if the station needs maintenance, this will return the dunno icon.
-    QPixmap icon = m_weatherService->icon( m_locationCode );
 
     QToolTip::remove(this);
     QToolTip::add(this, tip);
 
-    kdDebug(12004) << "show weather: " << endl;
-    kdDebug(12004) << "location: " << m_locationCode << endl;
-    kdDebug(12004) << "temp,wind,pressure: " << temp << " " << wind << " " << pressure << endl;
-    kdDebug(12004) << "tip: " << tip << endl;
+    kdDebug(12004) << "show weather: " << m_locationCode << " " << temp << " "
+                   << wind << " " << pressure << " " << iconName << endl;
 
     m_lblTemp->setText(temp);
     m_lblWind->setText(wind);
     m_lblPres->setText(pressure);
-
-    m_button->setPixmap( icon );
+    m_iconName = iconName;
+    m_button->setPixmap( WeatherIcons::load( iconName, 128 ) );
 }
 
 void dockwidget::initDock()

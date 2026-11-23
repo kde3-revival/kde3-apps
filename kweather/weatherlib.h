@@ -3,6 +3,7 @@
                              -------------------
     begin                : Wed Jul 5 2000
     copyright            : (C) 2000 by Ian Reinhart Geiser
+                           (C) 2026 The KDE3 revival authors (Open-Meteo)
     email                : geiseri@msoe.edu
  ***************************************************************************/
 
@@ -17,68 +18,90 @@
 
 #ifndef WEATHERLIB_H
 #define WEATHERLIB_H
+
+#include <qdict.h>
+#include <qmap.h>
 #include <qobject.h>
 #include <qstring.h>
-#include <qregexp.h>
-#include <qdict.h>
+#include <qstringlist.h>
 
 namespace KIO
 {
 	class Job;
 }
 
-class StationDatabase;
-
+/**
+ * The weather of the locations, from the forecast API of Open-Meteo
+ * (https://open-meteo.com/, no account or key).  A location is a key
+ * "<latitude>,<longitude>,<model>" (see WeatherModels::locationId());
+ * only its coordinates and the model are sent.  The values are returned
+ * as text in the units of setUnits().
+ */
 class WeatherLib : public QObject
 {
 	Q_OBJECT
-	
+
 	public:
 		class Data;
 
-		WeatherLib(StationDatabase *stationDB, QObject *parent =0L, const char *name =0L);
+		WeatherLib(QObject *parent =0L, const char *name =0L);
 		virtual ~WeatherLib();
 
-		QString temperature(const QString &stationID);
-		QString dewPoint(const QString &stationID);
-		QString relHumidity(const QString &stationID);
-		QString heatIndex(const QString &stationID);
-		QString windChill(const QString &stationID);
-		QString wind(const QString &stationID);
-		QString pressure(const QString &stationID);
-		QString iconName(const QString &stationID);
-		QString date(const QString &stationID);
-		QStringList weather(const QString &stationID);
-		QString visibility(const QString &stationID);
-		QStringList cover(const QString &stationID);
-		bool stationNeedsMaintenance(const QString &stationID);
-		
+		/** "celsius"/"fahrenheit", "kmh"/"ms"/"mph"/"kn",
+		    "mm"/"inch", "hPa"/"inHg"; refetches when they change. */
+		void setUnits(const QString &temperature, const QString &wind,
+		              const QString &precipitation, const QString &pressure);
+
+		QString temperature(const QString &id);
+		QString apparentTemperature(const QString &id);
+		QString dewPoint(const QString &id);
+		QString relHumidity(const QString &id);
+		QString heatIndex(const QString &id);
+		QString windChill(const QString &id);
+		QString wind(const QString &id);
+		QString pressure(const QString &id);
+		QString precipitation(const QString &id);
+		QString iconName(const QString &id);
+		QString date(const QString &id);
+		QStringList weather(const QString &id);
+		QStringList cover(const QString &id);
+		QString sunRise(const QString &id);
+		QString sunSet(const QString &id);
+		QStringList hourly(const QString &id, int hours);
+		QStringList daily(const QString &id);
+		QString rainNextHour(const QString &id);
+		QString error(const QString &id);
+		bool hasData(const QString &id);
+
 		QStringList stations();
-		bool isNight(const QString &stationID) const;
-		
-		void update(const QString &stationID);
-		void forceUpdate(const QString &stationID);
-		void remove(const QString &stationID);
-		
+
+		void update(const QString &id);
+		void forceUpdate(const QString &id);
+		void remove(const QString &id);
+
 	signals:
-		void fileUpdating(const QString &stationID);
-		void fileUpdate(const QString &stationID);
-		void stationRemoved(const QString &stationID);
+		void fileUpdating(const QString &id);
+		void fileUpdate(const QString &id);
+		void stationRemoved(const QString &id);
 
 	private slots:
-		void slotCopyDone(KIO::Job*);
+		void slotJobDone(KIO::Job*);
 
 	private:
-		Data* findData(const QString &stationID);
-		void clearData(Data *d);
+		Data* findData(const QString &id);
 		void getData(Data *d, bool force = false);
-		void processData(const QString &metar, Data *d);
+		void startJob(Data *d, const QString &model, bool current,
+		              bool hourly, bool daily);
+		QString formatTemperature(double value) const;
+		QString formatTime(const Data *d, long time) const;
+		QString formatPrecipitation(double value) const;
 
-		StationDatabase *m_StationDb;
-
-		QDict<Data> data;
-		bool fileDownloaded;
-		bool hostDown;
+		QDict<Data> m_data;
+		QMap<KIO::Job*, QString> m_jobs;
+		QString m_tempUnit;
+		QString m_windUnit;
+		QString m_precipUnit;
+		QString m_pressureUnit;
 };
 
 #endif
