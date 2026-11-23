@@ -61,7 +61,6 @@ private:
     bool m_discovering;         // StartDiscovery was called by us
     QMap<QString, QListViewItem *> m_items;
     // per device: "pairing", "trusting", "connecting", or the result
-    QMap<QString, QString> m_progress;
     QMap<QString, QString> m_state;
 };
 

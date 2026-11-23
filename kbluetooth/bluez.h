@@ -30,6 +30,8 @@ struct BluezAdapter
     bool discovering;
     bool discoverable;
     QString powerState;     // PowerState of BlueZ 5.64+, empty before
+
+    BluezAdapter() : powered(false), discovering(false), discoverable(false) {}
 };
 
 // One device (org.bluez.Device1, with org.bluez.Battery1 when present)
@@ -48,6 +50,10 @@ struct BluezDevice
     int rssi;
     int battery;            // percent, -1 without Battery1
     QStringList uuids;
+
+    BluezDevice()
+        : paired(false), trusted(false), blocked(false), connected(false),
+          hasRssi(false), rssi(0), battery(-1) {}
 };
 
 typedef QMap<QString, QVariant> BluezProperties;

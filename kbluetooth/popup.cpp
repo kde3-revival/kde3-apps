@@ -138,7 +138,8 @@ DevicePopup::DevicePopup(BluetoothTray *tray)
     m_message = new QLabel(this);
     m_message->setTextFormat(RichText);
     m_message->setAlignment(WordBreak | AlignLeft | AlignTop);
-    m_message->setMinimumWidth(260);
+    m_message->setMinimumWidth(240);
+    setMinimumWidth(260);
     layout->addWidget(m_message);
 
     QFrame *line = new QFrame(this);
@@ -194,6 +195,9 @@ void DevicePopup::place()
 
 void DevicePopup::refresh()
 {
+    // popupAt() refreshes before it shows the popup
+    if (!isVisible() && sender())
+        return;
     Bluez *bluez = Bluez::self();
     BluezAdapter adapter;
     bool haveAdapter = bluez->adapter(m_tray->adapterPath(), adapter);
@@ -202,7 +206,7 @@ void DevicePopup::refresh()
     QString title = QString::fromLatin1("<b>%1</b>").arg(i18n("Bluetooth"));
     if (haveAdapter)
         title += QString::fromLatin1(" &mdash; %1").arg(QStyleSheet::escape(adapter.name));
-    m_title->setText(title);
+    m_title->setText("<nobr>" + title + "</nobr>");
 
     m_power->blockSignals(true);
     m_power->setChecked(haveAdapter && adapter.powered);

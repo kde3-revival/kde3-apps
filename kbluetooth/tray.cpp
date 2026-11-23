@@ -193,7 +193,10 @@ void BluetoothTray::powerOnLogin()
     if (!Bluez::self()->adapter(adapterPath(), adapter) || m_poweredOnce.contains(adapter.address))
         return;
     m_poweredOnce.append(adapter.address);
-    if (!adapter.powered && m_rfkill->state() != RfKill::HardBlocked)
+    // a blocked radio cannot be switched on; the icon says why
+    if (!adapter.powered && m_rfkill->state() != RfKill::SoftBlocked
+        && m_rfkill->state() != RfKill::HardBlocked
+        && adapter.powerState != "off-blocked")
         Bluez::self()->setPowered(adapter.path, true);
 }
 
@@ -223,6 +226,10 @@ void BluetoothTray::connectionChanged(const QString &path, bool connected)
         return;
     if (connected)
         m_errors.remove(path);
+    // a device being paired connects and disconnects on the way: only the
+    // paired ones are worth a notification
+    if (!d.paired)
+        return;
     // switching the adapter off disconnects all: no notification for each
     BluezAdapter adapter;
     if (!connected && (!Bluez::self()->adapter(d.adapter, adapter) || !adapter.powered
