@@ -83,7 +83,7 @@ Options (all `ON` by default):
 | `KDE3_APPS_KVIEW`            | KView                                                     |
 | `KDE3_APPS_KRULER`           | KRuler                                                    |
 | `KDE3_APPS_KSNAPSHOT`        | KSnapshot                                                 |
-| `KDE3_APPS_KPDF`             | KPDF (needs poppler-glib and cairo); `KDE3_APPS_KPDF_FORCE_DRM` (`OFF` by default) removes the setting that ignores the copy and print restrictions of PDF files |
+| `KDE3_APPS_KPDF`             | KPDF (needs poppler-glib and cairo); `KDE3_APPS_KPDF_FORCE_DRM` (`OFF` by default) removes the setting that ignores the copy and print restrictions of PDF files; `KDE3_APPS_KPDF_TESTS` (`OFF`) builds the test driver `kpdfcheck` |
 | `KDE3_APPS_KSNAPSHOT_XSHAPE` | KSnapshot cuts non-rectangular windows to their shape (X Shape extension; the configuration stops if it is missing) |
 
 The handbook of an application is built with it.  To build a single
