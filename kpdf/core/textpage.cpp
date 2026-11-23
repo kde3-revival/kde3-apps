@@ -198,26 +198,50 @@ QString KPDFTextPage::getText( const NormalizedRect & area ) const
 
 uint KPDFTextPage::cursorAt( double x, double y ) const
 {
+    // 1. the line: the character box nearest to y; when several boxes
+    //    contain y (tall font boxes of neighbouring lines overlap), the one
+    //    whose centre is nearest
     uint len = length();
-    int best = -1;
-    double bestDy = 0, bestDx = 0;
+    int line = -1;
+    double bestDy = 0, bestDc = 0;
     for ( uint i = 0; i < len; ++i )
     {
         if ( !hasBox( i ) )
             continue;
-        double l = m_rects[4*i], t = m_rects[4*i+1], r = m_rects[4*i+2], b = m_rects[4*i+3];
+        double t = m_rects[4*i+1], b = m_rects[4*i+3];
         double dy = y < t ? t - y : ( y > b ? y - b : 0 );
+        double dc = fabs( cy( i ) - y );
+        if ( line < 0 || dy < bestDy - 1e-9 || ( fabs( dy - bestDy ) <= 1e-9 && dc < bestDc ) )
+        {
+            line = i;
+            bestDy = dy;
+            bestDc = dc;
+        }
+    }
+    if ( line < 0 )
+        return 0;
+
+    // 2. on that line (boxes overlapping it vertically by half), the
+    //    character nearest to x
+    double lt = m_rects[4*line+1], lb = m_rects[4*line+3];
+    int best = line;
+    double bestDx = -1;
+    for ( uint i = 0; i < len; ++i )
+    {
+        if ( !hasBox( i ) )
+            continue;
+        double t = m_rects[4*i+1], b = m_rects[4*i+3];
+        double overlap = QMIN( b, lb ) - QMAX( t, lt );
+        if ( overlap < QMIN( b - t, lb - lt ) / 2 )
+            continue;
+        double l = m_rects[4*i], r = m_rects[4*i+2];
         double dx = x < l ? l - x : ( x > r ? x - r : 0 );
-        // the nearest line first, then the nearest character on it
-        if ( best < 0 || dy < bestDy - 1e-9 || ( fabs( dy - bestDy ) <= 1e-9 && dx < bestDx ) )
+        if ( bestDx < 0 || dx < bestDx )
         {
             best = i;
-            bestDy = dy;
             bestDx = dx;
         }
     }
-    if ( best < 0 )
-        return 0;
 
     // before or after the character, in the direction of its line
     uint i = best;
