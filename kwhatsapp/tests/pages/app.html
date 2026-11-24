@@ -11,7 +11,7 @@
   #drop { position: absolute; left: 20px; top: 330px; width: 940px; height: 280px; border: 4px dashed #484;
           background: #efe; display: flex; align-items: center; justify-content: center; font-size: 24px; }
   #drop.over { background: #cfc; }
-  #out { position: absolute; left: 500px; top: 820px; margin: 0; font-size: 11px; height: 100px; overflow: hidden; }
+  #out { position: absolute; left: 1000px; top: 820px; margin: 0; font-size: 11px; height: 100px; overflow: hidden; }
 </style></head>
 <body>
 <button class="b" id="perm" style="left:20px;top:20px">permission</button>
@@ -58,6 +58,8 @@
 <button class="b" id="nevict" style="left:1000px;top:740px">notify 106</button>
 <button class="b" id="nprobe" style="left:20px;top:820px">constructor probe</button>
 <button class="b" id="nunicode" style="left:260px;top:820px">notify unicode</button>
+<button class="b" id="nclone" style="left:500px;top:820px">failed construction</button>
+<button class="b" id="nnav" style="left:740px;top:820px">queued, navigate</button>
 <pre id="out"></pre>
 <script>
 function log(text) {
@@ -132,23 +134,25 @@ document.getElementById('nclose').onclick = function() {
   later('Eve Closes', { body: 'closed by the page', tag: 't5' },
         function(n) { setTimeout(function() { n.close(); log('page closed t5'); }, 3000); });
 };
-// 40 x 40, opaque: (x * 6, y * 6, 255 - x * 3) (tests/inner.sh draws
-// the same to compare)
+// 40 x 40, opaque, noise (xorshift32, tests/inner.sh makes the same to
+// compare): its PNG does not compress, the data: URL is about 8,7k
+// characters
 function knownPixels() {
   var c = document.createElement('canvas');
   c.width = c.height = 40;
-  var g = c.getContext('2d'), d = g.createImageData(40, 40);
-  for (var y = 0; y < 40; y++)
-    for (var x = 0; x < 40; x++) {
-      var i = (y * 40 + x) * 4;
-      d.data[i] = x * 6; d.data[i + 1] = y * 6; d.data[i + 2] = 255 - x * 3; d.data[i + 3] = 255;
-    }
+  var g = c.getContext('2d'), d = g.createImageData(40, 40), s = 2463534242;
+  for (var i = 0; i < 40 * 40 * 4; i += 4) {
+    s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    d.data[i] = s & 255; d.data[i + 1] = (s >>> 8) & 255; d.data[i + 2] = (s >>> 16) & 255; d.data[i + 3] = 255;
+  }
   g.putImageData(d, 0, 0);
   return c.toDataURL('image/png');
 }
 var pageSetTimeout = window.setTimeout;
 document.getElementById('npixels').onclick = function() {
-  later('Pixel Known', { body: 'known pixels', tag: 'px1', icon: knownPixels() });
+  var icon = knownPixels();
+  log('pixels url ' + icon.length);
+  later('Pixel Known', { body: 'known pixels', tag: 'px1', icon: icon });
 };
 document.getElementById('ntamper').onclick = function() {
   var icon = knownPixels(), N = window.Notification;
@@ -210,6 +214,7 @@ document.getElementById('nevict').onclick = function() {
   pageSetTimeout(function() {
     var first = new Notification('Evict 0', { body: 'evicted', tag: 'ev0' });
     first.onclick = function() { log('notification click ev0'); };
+    first.onclose = function() { log('notification closed ev0'); };
     pageSetTimeout(function() {
       for (var i = 1; i <= 105; i++) {
         var n = new Notification('Evict ' + i, { body: 'evicting', tag: 'ev' + i });
@@ -235,11 +240,48 @@ document.getElementById('nprobe').onclick = function() {
       ' permission=' + Notification.permission + ' handler=' + (handler ? 'present' : 'absent'));
   try { Notification('x'); log('probe call without new: no error'); } catch (e) { log('probe call without new: ' + e.name); }
   n.close();
+  // members WebKit does not have are not read; an invalid dir stops the
+  // reading there
+  try {
+    new Notification('Probe Actions', { tag: 'pa', get actions() { throw new Error('read'); } }).close();
+    log('probe actions ignored');
+  } catch (e) { log('probe actions threw ' + e.message); }
+  var after = 0;
+  try {
+    new Notification('Probe Dir', { dir: 'sideways', get icon() { after++; return 'x'; }, get tag() { after++; return 't'; } });
+    log('probe dir accepted');
+  } catch (e) { log('probe dir ' + e.name + ' later reads=' + after); }
 };
 document.getElementById('nunicode').onclick = function() {
   // the 30th character an emoji (a surrogate pair at the cut), the
-  // sender with a right-to-left override
-  later('Mallory ‮evil‬ name', { body: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀 and more', tag: 'u1' });
+  // sender with a right-to-left override; then a ZWJ family at the
+  // sender's cut (40) and a flag (two regional indicators) at the text's
+  // (30)
+  later('Mallory \u202Eevil\u202C name', { body: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa\uD83D\uDE00 and more', tag: 'u1' });
+  later('Family ' + 'b'.repeat(31) + '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67 x',
+        { body: 'a'.repeat(28) + '\uD83C\uDDF7\uD83C\uDDF4 more', tag: 'u2' });
+};
+// a construction that fails (data that cannot be cloned) leaves no
+// announcement: the next one with the same title, body and tag (no
+// icon) has no picture
+document.getElementById('nclone').onclick = function() {
+  try {
+    new Notification('Clone Same', { body: 'clone', tag: 'dc', icon: redSquare(), data: function() {} });
+    log('clone constructed');
+  } catch (e) { log('clone ' + e.name); }
+  later('Clone Same', { body: 'clone', tag: 'dc' });
+};
+// two notifications, the first waiting for its picture (5 seconds away),
+// then another document of the site (nav.html) announces the second
+// one's title, body and tag with a picture: not given to it
+document.getElementById('nnav').onclick = function() {
+  pageSetTimeout(function() {
+    var a = new Notification('Nav Wait', { body: 'waits', tag: 'na', icon: '/slow.svg' });
+    var b = new Notification('Nav Same', { body: 'queued', tag: 'nb' });
+    log('nav notified');
+    location.href = '/nav.html';
+  }, 2000);
+  log('armed nav');
 };
 window.addEventListener('load', function() {
   var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.kwpeNotification;

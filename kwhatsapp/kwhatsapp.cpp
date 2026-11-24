@@ -434,8 +434,11 @@ void KWhatsApp::showBalloon()
     }
     if ( picture.isNull() )
         picture = DesktopIcon( "kwhatsapp", 48 );
-    if ( debug() )
+    if ( debug() ) {
+        if ( !message.icon.isNull() )
+            fprintf( stderr, "kwhatsapp: balloon picture %d\n", message.id );
         fprintf( stderr, "kwhatsapp: balloon %d: %s\n", message.id, text.utf8().data() );
+    }
     m_balloon = new KWhatsAppBalloon( text, picture, m_balloonTimeout );
     connect( m_balloon, SIGNAL( viewClicked() ), SLOT( slotBalloonView() ) );
     connect( m_balloon, SIGNAL( ignoreClicked() ), SLOT( slotBalloonIgnore() ) );

@@ -250,10 +250,14 @@ balloon_line() { since | grep '^kwhatsapp: balloon [0-9]*:' | sed -n "${1}p"; }
 
 # The notifications' pictures (kde3-wpepart's bridge), the balloon's queue
 bridge_tests() {
-  # a picture of known pixels: exactly these in the balloon
+  # a picture of known pixels (noise: an 8,7k characters data: URL):
+  # exactly these in the balloon
   python3 -c 'import sys
-sys.stdout.buffer.write(b"P6 40 40 255\n" + bytes(v for y in range(40) for x in range(40) for v in (x * 6, y * 6, 255 - x * 3)))' \
-    > $O/known.ppm
+s, out = 2463534242, bytearray()
+for i in range(40 * 40):
+    s ^= (s << 13) & 0xffffffff; s ^= s >> 17; s ^= (s << 5) & 0xffffffff
+    out += bytes((s & 255, (s >> 8) & 255, (s >> 16) & 255))
+sys.stdout.buffer.write(b"P6 40 40 255\n" + bytes(out))' > $O/known.ppm
   convert $O/known.ppm $O/known.png
   known_pixels() {   # known_pixels STEP SHOT
     balloon_shot $2
@@ -262,6 +266,8 @@ sys.stdout.buffer.write(b"P6 40 40 255\n" + bytes(v for y in range(40) for x in 
     case "$r" in "0 "*|0) ok "$1" ;; *) fail "$1" "compare: $r" ;; esac
   }
   front; click 130 775; away
+  n=$(sed -n 's/^pixels url //p' $O/page.log | tail -1)
+  [ "${n:-0}" -gt 4096 ] && ok picture-url-long || fail picture-url-long "${n:-none} characters"
   if wait_balloon 10; then
     known_pixels balloon-picture-known-pixels 18-balloon-known-pixels
     balloon_ignore; wait_no_balloon 3
@@ -299,6 +305,7 @@ sys.stdout.buffer.write(b"P6 40 40 255\n" + bytes(v for y in range(40) for x in 
   if wait_balloon 10; then
     balloon_line 1 | grep -q 'Evict 0[^0-9]' && ok evict-first-shown || fail evict-first-shown "$(balloon_line 1)"
     check evict-notified $O/page.log '^notified 106' 15
+    check evict-closed-in-webkit $O/page.log '^notification closed ev0$' 10
     sleep 3
     next=$(balloon_line 2 | sed -n 's/.*Evict \([0-9]*\).*/\1/p')
     # (the part keeps Evict 6 to 105; the queue the newest)
@@ -316,6 +323,8 @@ sys.stdout.buffer.write(b"P6 40 40 255\n" + bytes(v for y in range(40) for x in 
   click 130 855
   check constructor-probe $O/page.log '^probe reads title=1 body=1 tag=1 icon=1 constructed=Getter T1/body1/probe1 ctor=true instanceof=true name=Notification length=1 permission=granted handler=absent' 10
   check constructor-needs-new $O/page.log '^probe call without new: TypeError' 5
+  check constructor-unsupported-not-read $O/page.log '^probe actions ignored' 5
+  check constructor-invalid-dir-stops $O/page.log '^probe dir TypeError later reads=0$' 5
 
   # the sender's override cannot reach the balloon's text; the cut is
   # not inside the emoji (a surrogate pair)
@@ -331,8 +340,31 @@ assert "‪" + "a" * 29 + " ...‬‎" in t, "body cut wrong"
 assert "�" not in t, "a broken character"' $O/balloon-unicode.txt 2> $O/balloon-unicode.err; then
       ok balloon-unicode-cut-isolated
     else fail balloon-unicode-cut-isolated "$(tail -1 $O/balloon-unicode.err)"; fi
-    balloon_ignore; wait_no_balloon 3
+    balloon_ignore; sleep 1
+    # a ZWJ family at the sender's cut, a flag at the text's: whole or not at all
+    if wait_balloon 5; then
+      balloon_line 2 > $O/balloon-grapheme.txt
+      if python3 -I -c 'import sys
+t = open(sys.argv[1], "rb").read().decode("utf-8")
+assert "‪Family " + "b" * 31 + " ...‬" in t, "sender cut wrong"
+assert "‪" + "a" * 28 + " ...‬" in t, "text cut wrong"
+assert "🇷" not in t and "👨" not in t, "part of a cluster"' $O/balloon-grapheme.txt 2> $O/balloon-grapheme.err; then
+        ok balloon-grapheme-cut
+      else fail balloon-grapheme-cut "$(tail -1 $O/balloon-grapheme.err)"; fi
+      balloon_ignore; wait_no_balloon 3
+    else fail balloon-grapheme-cut "no second balloon"; fi
   else fail balloon-unicode-cut-isolated "no balloon"; fi
+
+  # a construction that failed (DataCloneError) left no announcement:
+  # the next notification of the same title, body and tag has no picture
+  front; click 610 855; away
+  check construction-failed $O/page.log '^clone DataCloneError' 5
+  if wait_balloon 10; then
+    balloon_shot 21-balloon-after-failed
+    n=$(pixels $O/21-balloon-after-failed.png '#ff0000' 8%)
+    [ "${n:-0}" -lt 20 ] && ok failed-construction-no-picture || fail failed-construction-no-picture "$n red pixels"
+    balloon_ignore; wait_no_balloon 3
+  else fail failed-construction-no-picture "no balloon"; fi
 
   # last (the page stays tampered): everything replaced, still the right
   # picture
@@ -591,6 +623,20 @@ EOC
   : > $O/page.log
   start_app --url http://localhost:8080/app.html || return
   check load-4 $O/page.log '^load visit=' 20
+  # notifications of a document, another document of the site announces
+  # the second one's title, body and tag with a picture: not given to it.
+  # (WebKit shows a notification with an icon only once it loaded the
+  # icon: "Nav Wait" never comes, its load stopped by the navigation;
+  # and it closes the old document's notifications soon after.)
+  : > $O/page.log; mark; click 850 855; away
+  check nav-forged $O/page.log '^nav forged' 15
+  sleep 3
+  id=$(since | sed -n 's/^kwhatsapp: balloon \([0-9]*\): .*Nav Same.*/\1/p' | head -1)
+  if [ -z "$id" ]; then fail nav-other-document-picture "no balloon"
+  elif since | grep -q "^kwhatsapp: balloon picture $id\$"; then fail nav-other-document-picture "it has the picture"
+  else ok nav-other-document-picture; fi
+  check nav-back $O/page.log '^load visit=' 20
+  front
   click 130 675; away
   if wait_balloon 10; then
     shot 40-balloon-large-font
