@@ -1,0 +1,13 @@
+<!DOCTYPE kpartgui SYSTEM "kpartgui.dtd">
+<!-- The shell's actions (Quit, Show Menubar, Configure Notifications,
+     Configure kwhatsapp) are KStdActions: ui_standards.rc places them in
+     File and Settings.  Listing them here too would show each twice (an
+     <Action> of ours is never matched with the standard one, it is added
+     at the menu's MergeLocal).  <Merge/> takes the place of the standard
+     file's default MergeLocal: the part's Edit and View between File and
+     Settings, not after Help. -->
+<kpartgui name="kwhatsapp" version="2">
+<MenuBar>
+  <Merge/>
+</MenuBar>
+</kpartgui>

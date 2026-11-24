@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=KWhatsApp
+GenericName=WhatsApp Web
+Comment=WhatsApp's web client as a KDE application
+Exec=kwhatsapp %i -caption "%c"
+Icon=kwhatsapp
+Terminal=false
+X-DCOP-ServiceType=Unique
+X-KDE-StartupNotify=true
+Categories=Qt;KDE;Network;InstantMessaging;

@@ -13,6 +13,7 @@ set(KDE3_APPS_VERSION "${PROJECT_VERSION}")
 
 # One option per application, so each can be built and packaged on its
 # own.  The handbook of an application follows its option.
+option(KDE3_APPS_KWHATSAPP   "Build kwhatsapp, WhatsApp Web as a KDE application (kde3-wpepart at run time)" ON)
 option(KDE3_APPS_ARK         "Build Ark, the archive manager" ON)
 option(KDE3_APPS_KCALC       "Build KCalc, the scientific calculator (needs the GMP library)" ON)
 option(KDE3_APPS_KCHARSELECT "Build KCharSelect, the character selector" ON)
@@ -51,5 +52,10 @@ foreach(_app ark kcalc kcharselect kdf ktimer kwallet khexedit
     add_subdirectory(${_app})
   endif()
 endforeach()
+
+# new applications
+if(KDE3_APPS_KWHATSAPP)
+  add_subdirectory(kwhatsapp)
+endif()
 
 add_subdirectory(doc)

@@ -48,6 +48,7 @@ New applications of the revival:
 | Directory     | Application    | What it is                                                      |
 |---------------|----------------|-----------------------------------------------------------------|
 | `kbluetooth/` | kbluetooth     | Bluetooth applet of the system tray on BlueZ 5: power, connect, pair (with its pairing agent) |
+| `kwhatsapp/`  | KWhatsApp      | WhatsApp Web (WhatsApp's own web client) as a KDE application: its own window and login, a tray icon with the unread count, notifications through KNotify, shown as Kopete's balloon at the tray icon with the sender's picture; WPE WebKit through kde3-wpepart's KWPEPart (app mode) |
 
 The handbook of each application is in `doc/<application>/`
 (`doc/kinfocenter/blockdevices/` belongs to KDiskFree).
@@ -96,6 +97,7 @@ Options (all `ON` by default):
 | `KDE3_APPS_KBLUETOOTH`       | kbluetooth (needs GIO; the configuration stops if it is missing) |
 | `KDE3_APPS_KPDF`             | KPDF (needs poppler-glib and cairo); `KDE3_APPS_KPDF_FORCE_DRM` (`OFF` by default) removes the setting that ignores the copy and print restrictions of PDF files; `KDE3_APPS_KPDF_TESTS` (`OFF`) builds the test driver `kpdfcheck` |
 | `KDE3_APPS_KSNAPSHOT_XSHAPE` | KSnapshot cuts non-rectangular windows to their shape (X Shape extension; the configuration stops if it is missing) |
+| `KDE3_APPS_KWHATSAPP`        | KWhatsApp (at run time: kde3-wpepart with its app mode)    |
 
 The handbook of an application is built with it.  To build a single
 application, switch the others off, for example KCalc only:
@@ -136,6 +138,9 @@ As stated in the source files:
   longer part of KPDF.  Most files of KView say GPL version 2
   only; a few in `kview/kviewviewer/` say version 2 or later.  KCharSelect
   and some single files have no licence header; their About dialogs say GPL.
+- KWhatsApp: GPL version 2 or later.  Its icon is WhatsApp's glyph (a
+  trademark of WhatsApp), traced to SVG: see `kwhatsapp/ICONS`.  KWhatsApp is not made or endorsed by
+  WhatsApp.
 - KSnapshot: `main.cpp`, `regiongrabber.*` and `windowgrabber.*` are GPL
   version 2 or later; `ksnapshot.cpp`, `quickshot.cpp` and `quickshot.h`
   say "Released under the LGPL" without a version; the other files have no
@@ -155,4 +160,3 @@ As stated in the source files:
 ## Planned
 
 - A weather applet: KWeather revived on Open-Meteo (ECMWF forecasts).
-- A WhatsApp Web application on KWPEPart.

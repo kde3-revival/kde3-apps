@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- Another document of the application's site (see app.html, "queued,
+     navigate"): at once it announces, as the bridge's DOM event, the
+     queued notification of the previous document with a red picture;
+     back to app.html 8 seconds later. -->
+<html><head><meta charset="utf-8"><title>WhatsApp</title>
+<script>
+(function() {
+  var c = document.createElement('canvas');
+  c.width = c.height = 64;
+  var g = c.getContext('2d');
+  g.fillStyle = '#ff0000'; g.fillRect(0, 0, 64, 64);
+  document.dispatchEvent(new CustomEvent('kwpe-notification',
+    { detail: JSON.stringify(['Nav Same', 'queued', 'nb', c.toDataURL('image/png')]) }));
+  fetch('/log?' + encodeURIComponent('nav forged'), { cache: 'no-store' });
+  setTimeout(function() { location.href = '/app.html'; }, 8000);
+})();
+</script></head>
+<body>another document</body></html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- A frame of another site in the application's page (served on 8081). -->
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;background:#fdd">
+<button id="top" style="position:absolute;left:0;top:0;width:220px;height:50px">frame: top to about:blank</button>
+<button id="geo" style="position:absolute;left:0;top:50px;width:220px;height:50px">frame: geolocation</button>
+<script>
+function log(t) { fetch('/log?' + encodeURIComponent(t), { cache: 'no-store' }); }
+// the bridge's handler: not in a frame (of another site); its messages
+// would be refused anyway
+(function() {
+  var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.kwpeNotification;
+  log('frame kwpe handler ' + (h ? 'present' : 'absent'));
+  if (h) {
+    try {
+      h.postMessage({ kind: 'hello', token: '0123456789abcdef0123456789abcdef' });
+      h.postMessage({ kind: 'pending', token: '0123456789abcdef0123456789abcdef', serial: 1,
+                      title: 'Pixel Known', body: 'known pixels', tag: 'px1' });
+      log('frame posted');
+    } catch (e) { log('frame post error ' + e); }
+  }
+  try {
+    parent.document.dispatchEvent(new CustomEvent('kwpe-notification', { detail: '["Pixel Known","known pixels","px1","data:,"]' }));
+    log('frame reached the top document');
+  } catch (e) { log('frame cannot reach the top document'); }
+})();
+document.getElementById('top').onclick = function() { top.location = 'about:blank'; log('frame sent top to about:blank'); };
+document.getElementById('geo').onclick = function() {
+  navigator.geolocation.getCurrentPosition(function() { log('frame geolocation GRANTED'); },
+                                           function(e) { log('frame geolocation error ' + e.code); });
+};
+</script></body></html>

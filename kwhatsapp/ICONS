@@ -1,0 +1,8 @@
+KWhatsApp's icon (hi*-app-kwhatsapp.png, hisc-app-kwhatsapp.svgz):
+WhatsApp's current glyph (the green outlined bubble with the phone), the
+inside of the bubble filled with white so that it reads on dark panels,
+traced to SVG with potrace from a 194x194 raster of it and rendered at
+each size, with a margin (1 pixel at 16, 22 and 32 pixels, about 4.5 %
+above) so that it does not touch the tray slot's edges.  The logo is a
+trademark of WhatsApp; KWhatsApp is not made or endorsed by WhatsApp.
+The tray icon and the notification balloon use it.
