@@ -113,6 +113,13 @@ KWhatsApp::KWhatsApp( const KURL& url )
          << QString::fromLatin1( "sites=" ) + url.host();
     if ( !userAgent.isEmpty() )
         args << QString::fromLatin1( "userAgent=" ) + userAgent;
+    // The senders' pictures: WhatsApp's own CDN (its CSP's img-src lists
+    // https://*.whatsapp.net; profile pictures come from pps.whatsapp.net,
+    // which allows CORS).  [General] PictureOrigins replaces it.
+    QString pictures = general.readEntry( "PictureOrigins", "https://*.whatsapp.net" );
+    args << QString::fromLatin1( "pictureOrigins=" ) + pictures;
+    if ( debug() )
+        args << QString::fromLatin1( "debug=true" );
     int error = 0;
     m_part = KParts::ComponentFactory::createPartInstanceFromLibrary<KParts::ReadOnlyPart>(
         "libkwpepart", this, "webview", this, "kwpepart", args, &error );
@@ -421,7 +428,9 @@ void KWhatsApp::slotNotification( int id, const QString& title, const QString& b
         showBalloon();
 }
 
-// KWHATSAPP_DEBUG set: what the balloon shows, on stderr (the tests).
+// KWHATSAPP_DEBUG set: what the balloon shows, on stderr (the tests),
+// and (the part's debug=true) why a notification's picture was not
+// taken, with only the scheme and host of its URL.
 bool KWhatsApp::debug()
 {
     static int set = -1;
