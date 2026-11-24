@@ -104,7 +104,11 @@ private:
         QString body;
         QImage icon;
     };
-    QValueList<Message> m_messages;   // the first is in the balloon
+    QValueList<Message> m_messages;   // the first is in the balloon (if shown)
+    static const uint maxMessages = 20;
+    static const uint maxMessageBytes = 256 * 1024;
+    static uint messageBytes( const Message& message );
+    static bool debug();
     QGuardedPtr<KWhatsAppBalloon> m_balloon;
 
     KParts::ReadOnlyPart* m_part;

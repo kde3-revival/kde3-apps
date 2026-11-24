@@ -12,6 +12,9 @@
 #include "kwhatsapp.h"
 #include "kwhatsappballoon.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <qbitmap.h>
 #include <qcheckbox.h>
 #include <qdatastream.h>
@@ -199,6 +202,28 @@ void KWhatsApp::slotTitleChanged( const QString& title )
         m_tray->setUnread( m_unread );
 }
 
+// The first @p length characters (UTF-16 units) of @p text at most, cut
+// before a whole character: not inside a surrogate pair, not between a
+// character and its combining marks.
+static QString safeLeft( const QString& text, uint length )
+{
+    if ( text.length() <= length )
+        return text;
+    uint n = length;
+    while ( n > 0 && ( text[n].isMark() || ( text[n].unicode() >= 0xdc00 && text[n].unicode() <= 0xdfff ) ) )
+        --n;
+    return text.left( n );
+}
+
+// Kopete's squashMessage(): one line, the first 30 characters.
+static QString squash( const QString& text, uint length )
+{
+    QString line = text.simplifyWhiteSpace();
+    if ( line.length() > length )
+        line = line.left( length ) + QString::fromLatin1( " ..." );
+    return line;
+}
+
 // KNotify's event "message" without its passive popup: the rest of what
 // the user chose in Configure Notifications (sound, log file, command,
 // ...) by the KNotify daemon, as KNotifyClient::event() sends it but with
@@ -252,13 +277,43 @@ void KWhatsApp::slotNotification( int id, const QString& title, const QString& b
     Message message;
     message.id = id;
     if ( m_notifyContent ) {
-        message.title = title;
-        message.body = body;
-        message.icon = icon;
+        // What the balloon can show of it (see showBalloon()).
+        message.title = safeLeft( title, 200 );
+        message.body = safeLeft( body, 200 );
+        if ( !icon.isNull() && icon.width() <= 96 && icon.height() <= 96 )
+            message.icon = icon.width() > 48 || icon.height() > 48 ? icon.smoothScale( 48, 48, QImage::ScaleMin ) : icon;
     }
     m_messages.append( message );
+    // At most 20 waiting, and their bytes bounded: the oldest one not in
+    // the balloon goes.
+    uint bytes = 0;
+    for ( QValueList<Message>::ConstIterator it = m_messages.begin(); it != m_messages.end(); ++it )
+        bytes += messageBytes( *it );
+    while ( m_messages.count() > maxMessages || ( bytes > maxMessageBytes && m_messages.count() > 1 ) ) {
+        QValueList<Message>::Iterator oldest = m_messages.begin();
+        if ( m_balloon )
+            ++oldest;
+        bytes -= messageBytes( *oldest );
+        if ( debug() )
+            fprintf( stderr, "kwhatsapp: balloon queue full: %d dropped\n", ( *oldest ).id );
+        m_messages.remove( oldest );
+    }
     if ( !m_balloon )
         showBalloon();
+}
+
+// KWHATSAPP_DEBUG set: what the balloon shows, on stderr (the tests).
+bool KWhatsApp::debug()
+{
+    static int set = -1;
+    if ( set < 0 )
+        set = getenv( "KWHATSAPP_DEBUG" ) ? 1 : 0;
+    return set;
+}
+
+uint KWhatsApp::messageBytes( const Message& message )
+{
+    return ( message.title.length() + message.body.length() ) * sizeof( QChar ) + ( message.icon.isNull() ? 0 : message.icon.numBytes() );
 }
 
 // The window is shown on this desktop and has the focus.
@@ -267,15 +322,6 @@ bool KWhatsApp::isInFront() const
     if ( !isVisible() || isMinimized() || !isActiveWindow() )
         return false;
     return KWin::windowInfo( winId(), NET::WMDesktop ).isOnCurrentDesktop();
-}
-
-// Kopete's squashMessage(): one line, the first 30 characters.
-static QString squash( const QString& text, uint length )
-{
-    QString line = text.simplifyWhiteSpace();
-    if ( line.length() > length )
-        line = line.left( length ) + QString::fromLatin1( " ..." );
-    return line;
 }
 
 // The first message waiting in the balloon (Kopete's addBalloon()).
@@ -292,15 +338,13 @@ void KWhatsApp::showBalloon()
     } else {
         text = i18n( "<qt><nobr><b>New message from %1:</b></nobr><br><nobr>\"%2\"</nobr></qt>" )
                    .arg( QStyleSheet::escape( squash( message.title, 40 ) ), QStyleSheet::escape( squash( message.body, 30 ) ) );
-        if ( !message.icon.isNull() ) {
-            QImage image = message.icon;
-            if ( image.width() > 48 || image.height() > 48 )
-                image = image.smoothScale( 48, 48, QImage::ScaleMin );
-            picture.convertFromImage( image );
-        }
+        if ( !message.icon.isNull() )
+            picture.convertFromImage( message.icon );   // at most 48 pixels (slotNotification())
     }
     if ( picture.isNull() )
         picture = DesktopIcon( "kwhatsapp", 48 );
+    if ( debug() )
+        fprintf( stderr, "kwhatsapp: balloon %d: %s\n", message.id, text.utf8().data() );
     m_balloon = new KWhatsAppBalloon( text, picture, m_balloonTimeout );
     connect( m_balloon, SIGNAL( viewClicked() ), SLOT( slotBalloonView() ) );
     connect( m_balloon, SIGNAL( ignoreClicked() ), SLOT( slotBalloonIgnore() ) );
