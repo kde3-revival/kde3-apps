@@ -10,14 +10,14 @@
 set -u
 T=${KWT_TESTS:-/src/apps/kwhatsapp/tests}
 O=${KWT_RESULTS:-/out}
-B=${KWT_BUILD:-/build}
+BUILD=${KWT_BUILD:-/build}
 mkdir -p $O
 SUMMARY=$O/summary.txt
 : > $SUMMARY
 export HOME=/tmp/home KDEHOME=/tmp/home/.kde
 rm -rf $HOME; mkdir -p $KDEHOME/share/config $HOME/dl
-export KDEDIRS=$B/inst/opt/kde3:/opt/kde3
-export PATH=$B/inst/opt/kde3/bin:/opt/kde3/bin:/opt/kde3-qt/bin:${KWT_TOOLS:+$KWT_TOOLS:}/usr/bin:/bin
+export KDEDIRS=$BUILD/inst/opt/kde3:/opt/kde3
+export PATH=$BUILD/inst/opt/kde3/bin:/opt/kde3/bin:/opt/kde3-qt/bin:${KWT_TOOLS:+$KWT_TOOLS:}/usr/bin:/bin
 export DISPLAY=:55 LANG=C.UTF-8 LC_ALL=C.UTF-8
 export XDG_RUNTIME_DIR=/tmp/xdg; mkdir -p -m 700 $XDG_RUNTIME_DIR
 export KWT_OUT=$O
@@ -243,6 +243,26 @@ balloon_tests() {
       xwininfo -id "$W" | grep -q IsViewable && ok balloon-view-shows-window || fail balloon-view-shows-window "not shown"
     else fail balloon-queue-next "no second balloon"; fi
   else fail balloon-queue-next "no balloon"; fi
+
+  # dismissed without a signal (KBalloon closes on a right or middle
+  # click): the next one comes; the dismissed one does not come back
+  front; mark; click 850 675; away
+  if wait_balloon 10; then
+    xdotool mousemove $(( BX + 46 )) $(( BY + 46 )) sleep 0.2 click 3
+    sleep 1
+    if wait_balloon 5 && balloon_line 2 | grep -q 'Queue Two'; then
+      ok balloon-right-click-next
+      xdotool mousemove $(( BX + 46 )) $(( BY + 46 )) sleep 0.2 click 2
+      wait_no_balloon 3 && ok balloon-middle-click-closes || fail balloon-middle-click-closes "still shown"
+      # a new notification: only it, not the dismissed ones again
+      front; click 130 675; away
+      if wait_balloon 10; then
+        balloon_line 3 | grep -q 'Bob Picture' && ok balloon-dismissed-not-again || fail balloon-dismissed-not-again "$(balloon_line 3)"
+        balloon_ignore; wait_no_balloon 3
+      else fail balloon-dismissed-not-again "no balloon"; fi
+    else fail balloon-right-click-next "$(balloon_line 2)"; fi
+    since | grep -q '^kwhatsapp: balloon dismissed: ' || fail balloon-dismissed-reported "no line"
+  else fail balloon-right-click-next "no balloon"; fi
 
   # the page closes its notification: the balloon goes
   front; click 1110 675; away
@@ -568,7 +588,7 @@ phase_local() {
   # drag and drop: files from another application onto the page
   head -c 300000 /dev/urandom > $HOME/photo.jpg
   printf 'dropped text\n' > $HOME/note.txt
-  $B/dragsource $HOME/note.txt $HOME/photo.jpg > $O/dragsource.log 2>&1 &
+  $BUILD/dragsource $HOME/note.txt $HOME/photo.jpg > $O/dragsource.log 2>&1 &
   DRAG=$!
   sleep 2
   S=$(window '^dragsource$')
@@ -751,7 +771,7 @@ EOC
   if wait_balloon 10; then
     shot 40-balloon-large-font
     [ "$BX" -ge 0 ] && [ $(( BX + BW )) -le 1600 ] && ok balloon-fits-screen || fail balloon-fits-screen "$BX+$BW"
-    $B/netclose "$W"
+    $BUILD/netclose "$W"
     i=0; while kill -0 $APP 2> /dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
     if kill -0 $APP 2> /dev/null; then fail window-closed-app-ends "still running"; quit_app
     else
