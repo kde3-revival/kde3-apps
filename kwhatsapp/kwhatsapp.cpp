@@ -10,7 +10,6 @@
 */
 
 #include "kwhatsapp.h"
-#include "kwhatsappballoon.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +32,7 @@
 
 #include <kaction.h>
 #include <kapplication.h>
+#include <kballoon.h>
 #include <kconfig.h>
 #include <dcopclient.h>
 #include <kdebug.h>
@@ -177,11 +177,11 @@ KWhatsApp::KWhatsApp( const KURL& url )
 }
 
 // The balloon is a window of its own (at the tray icon): it goes with
-// this one.
+// this one (first).
 KWhatsApp::~KWhatsApp()
 {
     m_messages.clear();
-    delete static_cast<KWhatsAppBalloon*>( m_balloon );
+    delete static_cast<KBalloon*>( m_balloon );
     if ( debug() )
         fprintf( stderr, "kwhatsapp: main window destroyed\n" );
 }
@@ -313,7 +313,7 @@ static QString safeLeft( const QString& text, uint length )
     return text.left( n );
 }
 
-// Kopete's squashMessage(): one line, the first 30 characters.
+// One line, the first @p length characters.
 static QString squash( const QString& text, uint length )
 {
     QString line = text.simplifyWhiteSpace();
@@ -351,7 +351,7 @@ static QString isolated( const QString& text )
 // KNotify's event "message" without its passive popup: the rest of what
 // the user chose in Configure Notifications (sound, log file, command,
 // ...) by the KNotify daemon, as KNotifyClient::event() sends it but with
-// the presentation given (Kopete's KNotification did the same).
+// the presentation given.
 static void notifyWithout( int present, const QString& text, WId window )
 {
     if ( present <= 0 )
@@ -377,7 +377,7 @@ void KWhatsApp::slotNotification( int id, const QString& title, const QString& b
         return;
     // KNotify: the user chooses in Settings, Configure Notifications (a
     // passive popup and a sound by default).  Its passive popup is our
-    // balloon at the tray icon (Kopete's); the rest is KNotify's.
+    // balloon at the tray icon (KBalloon); the rest is KNotify's.
     QString text;
     if ( m_notifyContent ) {
         QString escaped = QStyleSheet::escape( body );
@@ -452,21 +452,24 @@ bool KWhatsApp::isInFront() const
     return KWin::windowInfo( winId(), NET::WMDesktop ).isOnCurrentDesktop();
 }
 
-// The first message waiting in the balloon (Kopete's addBalloon()).
+// The first message waiting in the balloon: a KBalloon at the tray icon
+// (its tail at the icon's edge towards the middle of its monitor), else
+// in the corner of the screen.  Title and text are plain text (nothing
+// in them is markup); the sender and the text are cut short and kept in
+// their own direction (isolated()).
 void KWhatsApp::showBalloon()
 {
     if ( m_balloon || m_messages.isEmpty() )
         return;
     const Message& message = m_messages.first();
-    QString text;
+    QString title, text;
     QPixmap picture;
     if ( message.title.isEmpty() && message.body.isEmpty() ) {
         // NotificationContent off (or the page said nothing)
-        text = "<qt><nobr><b>" + QStyleSheet::escape( i18n( "New message" ) ) + "</b></nobr></qt>";
+        title = i18n( "New message" );
     } else {
-        text = i18n( "<qt><nobr><b>New message from %1:</b></nobr><br><nobr>\"%2\"</nobr></qt>" )
-                   .arg( QStyleSheet::escape( isolated( squash( message.title, 40 ) ) ),
-                         QStyleSheet::escape( isolated( squash( message.body, 30 ) ) ) );
+        title = i18n( "New message from %1" ).arg( isolated( squash( message.title, 40 ) ) );
+        text = isolated( squash( message.body, 30 ) );
         if ( !message.icon.isNull() )
             picture.convertFromImage( message.icon );   // at most 48 pixels (slotNotification())
     }
@@ -475,44 +478,56 @@ void KWhatsApp::showBalloon()
     if ( debug() ) {
         if ( !message.icon.isNull() )
             fprintf( stderr, "kwhatsapp: balloon picture %d\n", message.id );
-        fprintf( stderr, "kwhatsapp: balloon %d: %s\n", message.id, text.utf8().data() );
+        fprintf( stderr, "kwhatsapp: balloon %d: %s | %s\n", message.id, title.utf8().data(), text.utf8().data() );
     }
-    m_balloon = new KWhatsAppBalloon( text, picture, m_balloonTimeout );
-    connect( m_balloon, SIGNAL( viewClicked() ), SLOT( slotBalloonView() ) );
-    connect( m_balloon, SIGNAL( ignoreClicked() ), SLOT( slotBalloonIgnore() ) );
-    connect( m_balloon, SIGNAL( timedOut() ), SLOT( slotBalloonIgnore() ) );
-
-    if ( m_tray && m_tray->isDocked() ) {
-        // At the tray icon, the tail at its edge towards the screen's
-        // centre (the screen the icon is on).
-        QRect icon( m_tray->mapToGlobal( QPoint( 0, 0 ) ), m_tray->size() );
-        QRect screen = KGlobalSettings::desktopGeometry( icon.center() );
-        QPoint anchor( icon.center().x(), icon.center().y() > screen.center().y() ? icon.top() : icon.bottom() );
-        m_balloon->setAnchor( anchor, true );
-    } else {
-        // No system tray: the corner of the work area of the screen the
-        // window (or else the mouse) is on, as KPassivePopup.
-        QDesktopWidget* desktop = QApplication::desktop();
-        int number = isVisible() ? desktop->screenNumber( this ) : desktop->screenNumber( QCursor::pos() );
-        QRect screen = desktop->screenGeometry( number );
-        NETRootInfo info( qt_xdisplay(), NET::CurrentDesktop | NET::WorkArea, -1, false );
-        info.activate();
-        NETRect work = info.workArea( info.currentDesktop() );
-        QRect area = QRect( work.pos.x, work.pos.y, work.size.width, work.size.height ).intersect( screen );
-        if ( area.isEmpty() )
-            area = screen;
-        m_balloon->setAnchor( area.bottomRight(), false );
-    }
-    m_balloon->show();
+    KBalloon* balloon = new KBalloon( this, "balloon" );
+    m_balloon = balloon;
+    // (for tools that look for it: no frame shows it)
+    balloon->setCaption( i18n( "New message" ) );
+    balloon->setTitle( title );
+    balloon->setText( text );
+    balloon->setPixmap( picture );
+    balloon->insertAction( i18n( "to view", "View" ), ViewAction );
+    balloon->insertAction( i18n( "Ignore" ), IgnoreAction );
+    balloon->setTimeout( m_balloonTimeout * 1000 );   // 0: none
+    connect( balloon, SIGNAL( clicked() ), SLOT( slotBalloonView() ) );
+    connect( balloon, SIGNAL( actionActivated( int ) ), SLOT( slotBalloonAction( int ) ) );
+    connect( balloon, SIGNAL( timedOut() ), SLOT( slotBalloonIgnore() ) );
+    connect( balloon, SIGNAL( destroyed() ), SLOT( slotBalloonDestroyed() ) );
+    if ( m_tray && m_tray->isDocked() )
+        balloon->setAnchor( m_tray );
+    balloon->show();
+    // (its window is made when it is first shown)
+    balloon->setCaption( i18n( "New message" ) );
 }
 
-void KWhatsApp::closeBalloon()
+// The balloon goes: by itself (it was clicked, an action chosen, its
+// time out: it closes after its signal), or hidden here.  It deletes
+// itself.
+void KWhatsApp::closeBalloon( bool byItself )
 {
-    if ( m_balloon ) {
-        m_balloon->hide();
-        m_balloon->deleteLater();
-        m_balloon = 0;
-    }
+    KBalloon* balloon = m_balloon;
+    m_balloon = 0;
+    if ( !balloon )
+        return;
+    balloon->disconnect( this );
+    connect( balloon, SIGNAL( destroyed() ), SLOT( slotBalloonDestroyed() ) );
+    if ( !byItself )
+        balloon->hide();
+}
+
+void KWhatsApp::slotBalloonDestroyed()
+{
+    if ( debug() )
+        fprintf( stderr, "kwhatsapp: balloon destroyed\n" );
+}
+
+void KWhatsApp::slotBalloonAction( int action )
+{
+    if ( action == ViewAction )
+        slotBalloonView();
+    else
+        slotBalloonIgnore();
 }
 
 // The window is in front: every message waiting is read there.
@@ -523,14 +538,15 @@ void KWhatsApp::dropBalloons()
 }
 
 // View (or a click on the balloon): the window on this desktop, the chat
-// opened by the page (its notification's click).
+// opened by the page (its notification's click).  (The balloon's signal:
+// it closes by itself.)
 void KWhatsApp::slotBalloonView()
 {
+    closeBalloon( true );
     if ( m_messages.isEmpty() )
         return;
     int id = m_messages.first().id;
     m_messages.remove( m_messages.begin() );
-    closeBalloon();
     showOnCurrentDesktop();
     emit activateNotification( id );
     QTimer::singleShot( 0, this, SLOT( showBalloon() ) );
@@ -539,9 +555,9 @@ void KWhatsApp::slotBalloonView()
 // Ignore, the timeout: the next message.
 void KWhatsApp::slotBalloonIgnore()
 {
+    closeBalloon( true );
     if ( !m_messages.isEmpty() )
         m_messages.remove( m_messages.begin() );
-    closeBalloon();
     QTimer::singleShot( 0, this, SLOT( showBalloon() ) );
 }
 

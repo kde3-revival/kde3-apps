@@ -27,14 +27,14 @@ class KToggleAction;
 namespace KParts { class ReadOnlyPart; class URLArgs; }
 class KWhatsAppTray;
 class KWhatsAppStatusLabel;
-class KWhatsAppBalloon;
+class KBalloon;
 
 /**
  * The main window: WhatsApp Web (https://web.whatsapp.com, the official
  * web client) in kde3-wpepart's KWPEPart, app mode: a WebKit session of
  * its own under $KDEHOME/share/apps/kwhatsapp/webkit/ (the login stays),
- * the page's notifications through KNotify (its passive popup as Kopete's
- * balloon at the tray icon), links in the KDE browser,
+ * the page's notifications through KNotify (its passive popup as a
+ * KBalloon at the tray icon), links in the KDE browser,
  * downloads and uploads through KDE's dialogs.  Closing the window hides
  * it in the system tray; the tray icon shows the number of unread chats
  * (from the page title, "(N) WhatsApp").
@@ -80,6 +80,8 @@ private slots:
     void slotNotificationClosed( int id );
     void slotBalloonView();
     void slotBalloonIgnore();
+    void slotBalloonAction( int action );
+    void slotBalloonDestroyed();
     void showBalloon();
     void slotPermission( const QString& kind, const QString& origin, bool& allow );
     void slotOpenURL( const KURL& url, const KParts::URLArgs& args );
@@ -93,10 +95,10 @@ private slots:
 private:
     void savePosition();
     bool isInFront() const;
-    void closeBalloon();
+    void closeBalloon( bool byItself = false );
     void dropBalloons();
 
-    // A notification for the balloon (Kopete's queue: one at a time).
+    // A notification for the balloon (one at a time, the others wait).
     struct Message
     {
         int id;   // the part's
@@ -105,11 +107,12 @@ private:
         QImage icon;
     };
     QValueList<Message> m_messages;   // the first is in the balloon (if shown)
+    enum { ViewAction = 1, IgnoreAction = 2 };   // the balloon's buttons
     static const uint maxMessages = 20;
     static const uint maxMessageBytes = 256 * 1024;
     static uint messageBytes( const Message& message );
     static bool debug();
-    QGuardedPtr<KWhatsAppBalloon> m_balloon;
+    QGuardedPtr<KBalloon> m_balloon;
 
     KParts::ReadOnlyPart* m_part;
     QString m_site;   // the host of the page opened (web.whatsapp.com)
