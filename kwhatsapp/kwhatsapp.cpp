@@ -237,12 +237,28 @@ static bool isRegionalIndicator( uint c )
     return c >= 0x1f1e6 && c <= 0x1f1ff;
 }
 
+// Indic_Conjunct_Break: the viramas that join consonants (Linker) and
+// the consonants of those scripts (Devanagari, Bengali, Gujarati, Oriya,
+// Telugu, Malayalam).
+static bool isConjunctLinker( uint c )
+{
+    return c == 0x094d || c == 0x09cd || c == 0x0acd || c == 0x0b4d || c == 0x0c4d || c == 0x0d4d;
+}
+
+static bool isConjunctConsonant( uint c )
+{
+    if ( !( ( c >= 0x0900 && c <= 0x0b7f ) || ( c >= 0x0c00 && c <= 0x0c7f ) || ( c >= 0x0d00 && c <= 0x0d7f ) ) )
+        return false;
+    return QChar( ushort( c ) ).category() == QChar::Letter_Other;
+}
+
 // Unicode's grapheme cluster boundaries (UAX #29), the ones a cut of
 // a sender's name or a message meets: none inside a surrogate pair,
 // before an extending character (combining marks, ZWJ, variation
 // selectors, emoji modifiers, tag characters, Hangul vowel and final
-// jamo), after a ZWJ (emoji sequences) or inside a pair of regional
-// indicators (a flag).
+// jamo), after a ZWJ (emoji sequences), inside a pair of regional
+// indicators (a flag) or inside an Indic conjunct (a consonant after a
+// virama that joins it, GB9c).
 static bool isGraphemeBoundary( const QString& s, uint i )
 {
     if ( i == 0 || i >= s.length() )
@@ -256,6 +272,17 @@ static bool isGraphemeBoundary( const QString& s, uint i )
         return false;
     if ( codePointBefore( s, i ) == 0x200d )
         return false;
+    if ( isConjunctConsonant( c ) ) {
+        // consonant [Extend | Linker]* Linker [Extend | Linker]* | consonant
+        bool linker = false;
+        uint j = i;
+        while ( j > 0 && ( s[j - 1].isMark() || s[j - 1].unicode() == 0x200d ) ) {
+            linker = linker || isConjunctLinker( s[j - 1].unicode() );
+            --j;
+        }
+        if ( linker && j > 0 && isConjunctConsonant( s[j - 1].unicode() ) )
+            return false;
+    }
     if ( isRegionalIndicator( c ) ) {
         uint before = 0;
         for ( uint j = i; j > 0 && isRegionalIndicator( codePointBefore( s, j ) ); j -= 2 )
