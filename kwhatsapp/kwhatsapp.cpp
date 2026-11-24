@@ -95,7 +95,7 @@ private:
 };
 
 KWhatsApp::KWhatsApp( const KURL& url )
-    : KParts::MainWindow( 0, "kwhatsapp-mainwindow" ), m_part( 0 ), m_statusLabel( 0 ), m_tray( 0 ), m_showMenubar( 0 ), m_unread( 0 ),
+    : KParts::MainWindow( 0, "kwhatsapp-mainwindow" ), m_shown( 0 ), m_part( 0 ), m_statusLabel( 0 ), m_tray( 0 ), m_showMenubar( 0 ), m_unread( 0 ),
       m_quitting( false ), m_notify( true ), m_notifyContent( true ), m_closeToTray( true ), m_balloonTimeout( 30 )
 {
     readSettings();
@@ -181,6 +181,7 @@ KWhatsApp::KWhatsApp( const KURL& url )
 KWhatsApp::~KWhatsApp()
 {
     m_messages.clear();
+    m_shown = 0;
     delete static_cast<KBalloon*>( m_balloon );
     if ( debug() )
         fprintf( stderr, "kwhatsapp: main window destroyed\n" );
@@ -482,6 +483,7 @@ void KWhatsApp::showBalloon()
     }
     KBalloon* balloon = new KBalloon( this, "balloon" );
     m_balloon = balloon;
+    m_shown = balloon;
     // (for tools that look for it: no frame shows it)
     balloon->setCaption( i18n( "New message" ) );
     balloon->setTitle( title );
@@ -508,6 +510,7 @@ void KWhatsApp::closeBalloon( bool byItself )
 {
     KBalloon* balloon = m_balloon;
     m_balloon = 0;
+    m_shown = 0;
     if ( !balloon )
         return;
     balloon->disconnect( this );
@@ -520,6 +523,17 @@ void KWhatsApp::slotBalloonDestroyed()
 {
     if ( debug() )
         fprintf( stderr, "kwhatsapp: balloon destroyed\n" );
+    if ( !m_shown || sender() != m_shown )
+        return;
+    // Dismissed (a right or middle click): as Ignore, the next message.
+    m_shown = 0;
+    m_balloon = 0;
+    if ( !m_messages.isEmpty() ) {
+        if ( debug() )
+            fprintf( stderr, "kwhatsapp: balloon dismissed: %d\n", m_messages.first().id );
+        m_messages.remove( m_messages.begin() );
+    }
+    QTimer::singleShot( 0, this, SLOT( showBalloon() ) );
 }
 
 void KWhatsApp::slotBalloonAction( int action )

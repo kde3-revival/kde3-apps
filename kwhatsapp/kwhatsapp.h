@@ -113,6 +113,10 @@ private:
     static uint messageBytes( const Message& message );
     static bool debug();
     QGuardedPtr<KBalloon> m_balloon;
+    // The balloon of the first message, until we close it (closeBalloon(),
+    // the main window going): one that goes otherwise (KBalloon hides on
+    // a right or middle click, no signal) was dismissed.
+    const KBalloon* m_shown;
 
     KParts::ReadOnlyPart* m_part;
     QString m_site;   // the host of the page opened (web.whatsapp.com)
