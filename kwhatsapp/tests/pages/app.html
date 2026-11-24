@@ -63,6 +63,8 @@
 <button class="b" id="ntwin" style="left:1000px;top:820px">two alike</button>
 <button class="b" id="ncors" style="left:740px;top:340px;height:40px;z-index:1">icon, CORS</button>
 <button class="b" id="nrefused" style="left:740px;top:390px;height:40px;z-index:1">icon, unlisted</button>
+<button class="b" id="nredirect" style="left:740px;top:440px;height:40px;z-index:1">icon, redirected</button>
+<button class="b" id="nbigburst" style="left:740px;top:490px;height:40px;z-index:1">burst of 86</button>
 <button class="b" id="nburst" style="left:740px;top:560px;height:40px;z-index:1">burst</button>
 <pre id="out"></pre>
 <script>
@@ -186,8 +188,11 @@ document.getElementById('ntamper').onclick = function() {
     n.onclick = function() { log('notification click px2'); };
   }, 2000);
 };
+// (what it needs kept from before the page tampers with it: the burst
+// of 86 comes after that)
+var pageDispatch = EventTarget.prototype.dispatchEvent, PageCustomEvent = CustomEvent, pageStringify = JSON.stringify;
 function forge(title, body, tag, icon) {
-  document.dispatchEvent(new CustomEvent('kwpe-notification', { detail: JSON.stringify([title, body, tag, icon]) }));
+  pageDispatch.call(document, new PageCustomEvent('kwpe-notification', { detail: pageStringify([title, body, tag, icon]) }));
 }
 document.getElementById('nflood').onclick = function() {
   // announcements matching the notification, 25 every 100 ms for 8
@@ -270,23 +275,41 @@ document.getElementById('nunicode').onclick = function() {
 // two notifications alike (no tag), the first with an icon that takes a
 // second (WebKit shows it once loaded: the second comes first): the one
 // without an icon never gets the other's picture
-// A with an icon that takes a second, 19 others, B alike with another
-// icon that takes two: the burst drops A's announcement (20 kept); A,
-// shown first, must not get B's picture (nor B, whose announcement A
-// took, A's)
+// A with an icon that takes 0.4 seconds, 19 other announcements, B alike
+// with another icon (blue) that takes 0.9 (both within the bridge's 1.5):
+// the burst drops A's announcement (20 kept); A, shown first, must not
+// get B's picture (nor B, whose announcement A took, A's).  The same with
+// 84 others: more announcements dropped than the part remembers.
 // a picture of an origin the application lists (tests: 127.0.0.1:8081)
-// that allows CORS; one of an origin not listed (8082)
+// that allows CORS; one of an origin not listed (8082); one of the listed
+// origin that redirects to the one not listed (both allow CORS)
 document.getElementById('ncors').onclick = function() {
   later('Cors Picture', { body: 'listed origin, CORS', tag: 'c1', icon: 'http://127.0.0.1:8081/cors/avatar.svg?secret=1' });
 };
 document.getElementById('nrefused').onclick = function() {
   later('Unlisted Picture', { body: 'origin not listed', tag: 'c2', icon: 'http://127.0.0.1:8082/avatar.svg?secret=2' });
 };
+document.getElementById('nredirect').onclick = function() {
+  later('Redirected Picture', { body: 'listed origin, redirected', tag: 'c3',
+                                icon: 'http://127.0.0.1:8081/cors/redirect?to=' +
+                                      encodeURIComponent('http://127.0.0.1:8082/cors/avatar.svg?redirected=1') });
+};
+function notifyBurst(title, others) {
+  var list = [new Notification(title, { body: 'alike', icon: '/delay.svg?ms=400&' + title.length })];
+  // (announcements of no notification, as the page may send: none of
+  // them is shown and takes its announcement before the cut, all of them
+  // dropped, A's first)
+  for (var i = 1; i <= others; i++) forge(title + ' filler ' + i, 'burst', 'f' + i, '');
+  list.push(new Notification(title, { body: 'alike', icon: '/delay.svg?ms=900&blue&' + title.length }));
+  return list;
+}
 document.getElementById('nburst').onclick = function() {
-  window.burst = [new Notification('Burst', { body: 'alike', icon: '/delay1.svg' })];
-  for (var i = 1; i <= 19; i++) window.burst.push(new Notification('Filler ' + i, { body: 'burst', tag: 'f' + i }));
-  window.burst.push(new Notification('Burst', { body: 'alike', icon: '/delay2.svg' }));
+  window.burst = notifyBurst('Burst', 19);
   log('burst notified');
+};
+document.getElementById('nbigburst').onclick = function() {
+  window.bigBurst = notifyBurst('Big Burst', 84);
+  log('big burst notified');
 };
 document.getElementById('ntwin').onclick = function() {
   pageSetTimeout(function() {

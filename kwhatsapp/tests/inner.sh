@@ -302,25 +302,6 @@ sys.stdout.buffer.write(b"P6 40 40 255\n" + bytes(out))' > $O/known.ppm
   else fail balloon-queue-bounded "no balloon"; fi
   front; sleep 1
 
-  # 106: the part keeps 100; the first one (in the balloon) dropped by it:
-  # the balloon goes, the next one's click works
-  mark; click 1110 775; away
-  if wait_balloon 10; then
-    balloon_line 1 | grep -q 'Evict 0[^0-9]' && ok evict-first-shown || fail evict-first-shown "$(balloon_line 1)"
-    check evict-notified $O/page.log '^notified 106' 15
-    check evict-closed-in-webkit $O/page.log '^notification closed ev0$' 10
-    sleep 3
-    next=$(balloon_line 2 | sed -n 's/.*Evict \([0-9]*\).*/\1/p')
-    # (the part keeps Evict 6 to 105; the queue the newest)
-    if [ -n "$next" ] && [ "$next" -ge 6 ]; then ok evict-retires-balloon
-    else fail evict-retires-balloon "next: $(balloon_line 2)"; fi
-    if [ -n "$next" ] && wait_balloon 5; then
-      balloon_view
-      check evict-next-click $O/page.log "^notification click ev$next\$" 10
-    else fail evict-next-click "no balloon"; fi
-  else fail evict-first-shown "no balloon"; fi
-  front; sleep 1
-
   # the constructor's arguments read once, the same given to WebKit; the
   # wrapper looks like the constructor; no handler in the page's world
   click 130 855
@@ -410,12 +391,28 @@ assert "\u202a" + "a" * 28 + " ...\u202c" in t, "conjunct cut"' $O/balloon-conju
   front; click 850 410; away
   check picture-unlisted-reported $O/kwhatsapp-$RUN.log "^kwpe: app: a notification's picture refused: http://127.0.0.1:8082\$" 10
   wait_balloon 10 && { balloon_ignore; wait_no_balloon 3; }
+  # a picture of the listed origin that redirects to one not listed (both
+  # allow CORS): no redirect is followed, no picture, the listed origin
+  # reported
+  front; mark; click 850 460; away
+  if wait_balloon 10; then
+    balloon_shot 23-balloon-redirected
+    n=$(pixels $O/23-balloon-redirected.png '#ff0000' 8%)
+    g=$(pixels $O/23-balloon-redirected.png '#3cc24e' 15%)
+    [ "${n:-0}" -lt 20 ] && [ "${g:-0}" -gt 200 ] && ok redirected-picture-not-shown \
+      || fail redirected-picture-not-shown "$n red, $g green pixels"
+    balloon_ignore; wait_no_balloon 3
+  else fail redirected-picture-not-shown "no balloon"; fi
+  if since | grep -q "^kwpe: app: a notification's picture failed: http://127.0.0.1:8081\$"; then
+    ok redirected-picture-reported
+  else fail redirected-picture-reported "$(since | grep "a notification's picture")"; fi
   if grep "a notification's picture" $O/kwhatsapp-$RUN.log | grep -qE 'avatar|secret|\?|Picture'; then
     fail picture-report-host-only "$(grep "a notification's picture" $O/kwhatsapp-$RUN.log | head -3)"
   else ok picture-report-host-only; fi
 
   # a burst drops an announcement: the notification alike it does not
-  # take another one's picture
+  # take another one's picture (both pictures come within the bridge's
+  # timeout: B's would be there to take)
   front; mark; click 850 580
   check burst-notified $O/page.log '^burst notified' 10
   sleep 6
@@ -432,6 +429,38 @@ assert "\u202a" + "a" * 28 + " ...\u202c" in t, "conjunct cut"' $O/balloon-conju
     known_pixels balloon-picture-tampered-page 20-balloon-tampered
     balloon_ignore; wait_no_balloon 3
   else fail balloon-picture-tampered-page "no balloon"; fi
+
+  # after it: a burst of 86 announcements drops more than the part
+  # remembers (no picture for the rest of the document); neither of the
+  # two alike gets a picture
+  front; mark; click 850 510
+  check big-burst-notified $O/page.log '^big burst notified' 10
+  sleep 6
+  n=$(since | grep -c '^kwhatsapp: notification [0-9]*\( with a picture\)*: Big Burst$')
+  if [ "$n" != 2 ]; then fail big-burst-no-wrong-picture "$n of 2 shown"
+  elif since | grep -q '^kwhatsapp: notification [0-9]* with a picture: Big Burst$'; then
+    fail big-burst-no-wrong-picture "$(since | grep 'with a picture: Big Burst')"
+  else ok big-burst-no-wrong-picture; fi
+
+  # 106: the part keeps 100; the first one (in the balloon) dropped by it:
+  # the balloon goes, the next one's click works (after the pictures: its
+  # 86 dropped announcements end them for the document too)
+  front; sleep 1; mark; click 1110 775; away
+  if wait_balloon 10; then
+    balloon_line 1 | grep -q 'Evict 0[^0-9]' && ok evict-first-shown || fail evict-first-shown "$(balloon_line 1)"
+    check evict-notified $O/page.log '^notified 106' 15
+    check evict-closed-in-webkit $O/page.log '^notification closed ev0$' 10
+    sleep 3
+    next=$(balloon_line 2 | sed -n 's/.*Evict \([0-9]*\).*/\1/p')
+    # (the part keeps Evict 6 to 105; the queue the newest)
+    if [ -n "$next" ] && [ "$next" -ge 6 ]; then ok evict-retires-balloon
+    else fail evict-retires-balloon "next: $(balloon_line 2)"; fi
+    if [ -n "$next" ] && wait_balloon 5; then
+      balloon_view
+      check evict-next-click $O/page.log "^notification click ev$next\$" 10
+    else fail evict-next-click "no balloon"; fi
+  else fail evict-first-shown "no balloon"; fi
+  front; sleep 1
 }
 
 phase_local() {

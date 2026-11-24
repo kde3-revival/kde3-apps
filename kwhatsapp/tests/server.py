@@ -53,10 +53,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # a picture that takes a second
             time.sleep(1)
             self.path = '/avatar.svg'
-        if url.path == '/delay2.svg':
-            # another picture, that takes two seconds
-            time.sleep(2)
-            self.path = '/avatar2.svg'
+        if url.path == '/delay.svg':
+            # ?ms=MS[&blue]: the red picture (blue: avatar2.svg) MS
+            # milliseconds later (at most 1400: below the bridge's
+            # timeout of 1.5 seconds)
+            q = urllib.parse.parse_qs(url.query, keep_blank_values=True)
+            time.sleep(min(int(q['ms'][0]), 1400) / 1000)
+            self.path = '/avatar2.svg' if 'blue' in q else '/avatar.svg'
         if url.path == '/slow.svg':
             # a picture that takes 5 seconds
             time.sleep(5)
