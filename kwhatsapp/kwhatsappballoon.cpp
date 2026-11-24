@@ -18,6 +18,9 @@
 
 #include "kwhatsappballoon.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <qlabel.h>
 #include <qlayout.h>
 #include <qpainter.h>
@@ -71,6 +74,12 @@ KWhatsAppBalloon::KWhatsAppBalloon( const QString& text, const QPixmap& picture,
     connect( ignoreButton, SIGNAL( clicked() ), SIGNAL( ignoreClicked() ) );
     if ( timeout > 0 )
         QTimer::singleShot( timeout * 1000, this, SIGNAL( timedOut() ) );
+}
+
+KWhatsAppBalloon::~KWhatsAppBalloon()
+{
+    if ( getenv( "KWHATSAPP_DEBUG" ) )
+        fprintf( stderr, "kwhatsapp: balloon destroyed\n" );
 }
 
 void KWhatsAppBalloon::setAnchor( const QPoint& anchor, bool tail )

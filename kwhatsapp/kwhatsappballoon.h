@@ -37,6 +37,7 @@ class KWhatsAppBalloon : public QWidget
 public:
     /** @p timeout in seconds (0: none): timedOut(). */
     KWhatsAppBalloon( const QString& text, const QPixmap& picture, int timeout );
+    virtual ~KWhatsAppBalloon();
 
     /**
      * Placed at @p anchor (global): with the tail at it when @p tail,

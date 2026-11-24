@@ -169,8 +169,14 @@ KWhatsApp::KWhatsApp( const KURL& url )
     m_part->openURL( url );
 }
 
+// The balloon is a window of its own (at the tray icon): it goes with
+// this one.
 KWhatsApp::~KWhatsApp()
 {
+    m_messages.clear();
+    delete static_cast<KWhatsAppBalloon*>( m_balloon );
+    if ( debug() )
+        fprintf( stderr, "kwhatsapp: main window destroyed\n" );
 }
 
 // WhatsApp Web refuses browsers it does not know ("browser not
