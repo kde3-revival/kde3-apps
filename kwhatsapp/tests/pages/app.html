@@ -11,7 +11,7 @@
   #drop { position: absolute; left: 20px; top: 330px; width: 940px; height: 280px; border: 4px dashed #484;
           background: #efe; display: flex; align-items: center; justify-content: center; font-size: 24px; }
   #drop.over { background: #cfc; }
-  #out { position: absolute; left: 20px; top: 730px; margin: 0; font-size: 13px; }
+  #out { position: absolute; left: 500px; top: 820px; margin: 0; font-size: 11px; height: 100px; overflow: hidden; }
 </style></head>
 <body>
 <button class="b" id="perm" style="left:20px;top:20px">permission</button>
@@ -45,6 +45,19 @@
 <button class="b" id="nforeign" style="left:500px;top:640px">notify foreign icon</button>
 <button class="b" id="ntwo" style="left:740px;top:640px">notify two</button>
 <button class="b" id="nclose" style="left:1000px;top:640px">notify, page closes</button>
+<!-- the bridge of the notifications' pictures: a picture of known pixels;
+     the same after the page replaced what it could (canvas, Image, URL,
+     timers, Reflect, JSON, dispatchEvent, ...); announcements flooding a
+     waiting notification; 30 at once (the balloon's queue); 106 (the
+     part keeps 100); the constructor's arguments read once; text that
+     must be cut and isolated -->
+<button class="b" id="npixels" style="left:20px;top:740px">notify known pixels</button>
+<button class="b" id="ntamper" style="left:260px;top:740px">tampered, known pixels</button>
+<button class="b" id="nflood" style="left:500px;top:740px">flood announcements</button>
+<button class="b" id="nover" style="left:740px;top:740px">notify 30</button>
+<button class="b" id="nevict" style="left:1000px;top:740px">notify 106</button>
+<button class="b" id="nprobe" style="left:20px;top:820px">constructor probe</button>
+<button class="b" id="nunicode" style="left:260px;top:820px">notify unicode</button>
 <pre id="out"></pre>
 <script>
 function log(text) {
@@ -119,6 +132,119 @@ document.getElementById('nclose').onclick = function() {
   later('Eve Closes', { body: 'closed by the page', tag: 't5' },
         function(n) { setTimeout(function() { n.close(); log('page closed t5'); }, 3000); });
 };
+// 40 x 40, opaque: (x * 6, y * 6, 255 - x * 3) (tests/inner.sh draws
+// the same to compare)
+function knownPixels() {
+  var c = document.createElement('canvas');
+  c.width = c.height = 40;
+  var g = c.getContext('2d'), d = g.createImageData(40, 40);
+  for (var y = 0; y < 40; y++)
+    for (var x = 0; x < 40; x++) {
+      var i = (y * 40 + x) * 4;
+      d.data[i] = x * 6; d.data[i + 1] = y * 6; d.data[i + 2] = 255 - x * 3; d.data[i + 3] = 255;
+    }
+  g.putImageData(d, 0, 0);
+  return c.toDataURL('image/png');
+}
+var pageSetTimeout = window.setTimeout;
+document.getElementById('npixels').onclick = function() {
+  later('Pixel Known', { body: 'known pixels', tag: 'px1', icon: knownPixels() });
+};
+document.getElementById('ntamper').onclick = function() {
+  var icon = knownPixels(), N = window.Notification;
+  // everything a script of the page could replace before it notifies
+  var P2 = CanvasRenderingContext2D.prototype, PC = HTMLCanvasElement.prototype;
+  P2.drawImage = function() {};
+  P2.getImageData = function(x, y, w, h) { return { data: new Uint8ClampedArray(w * h * 4) }; };
+  PC.getContext = function() { return null; };
+  PC.toDataURL = function() { return 'data:,'; };
+  window.Image = function() { return {}; };
+  window.URL = function() { throw new Error('no URL'); };
+  window.setTimeout = function() { return 0; };
+  window.btoa = function() { return ''; };
+  Reflect.construct = function() { throw new Error('no construct'); };
+  Reflect.apply = function() { throw new Error('no apply'); };
+  JSON.stringify = function() { return '"tampered"'; };
+  EventTarget.prototype.dispatchEvent = function() { return true; };
+  Object.defineProperty = function() { throw new Error('no defineProperty'); };
+  Object.create = function() { return {}; };
+  window.CustomEvent = function() { return {}; };
+  String.fromCharCode = function() { return ''; };
+  window.Notification = N;
+  log('tampered');
+  pageSetTimeout(function() {
+    var n = new Notification('Pixel Tampered', { body: 'tampered page', tag: 'px2', icon: icon });
+    n.onshow = function() { log('notification shown px2'); };
+    n.onclick = function() { log('notification click px2'); };
+  }, 2000);
+};
+function forge(title, body, tag, icon) {
+  document.dispatchEvent(new CustomEvent('kwpe-notification', { detail: JSON.stringify([title, body, tag, icon]) }));
+}
+document.getElementById('nflood').onclick = function() {
+  // announcements matching the notification, 25 every 100 ms for 8
+  // seconds, of a picture that comes after 5 seconds
+  pageSetTimeout(function() {
+    var end = Date.now() + 8000;
+    var timer = setInterval(function() {
+      for (var i = 0; i < 25; i++) forge('Flood', 'flooded', 'fl', '/slow.svg');
+      if (Date.now() > end) { clearInterval(timer); log('flood over'); }
+    }, 100);
+    pageSetTimeout(function() {
+      var n = new Notification('Flood', { body: 'flooded', tag: 'fl', icon: '/slow.svg' });
+      n.onshow = function() { log('notification shown fl'); };
+      n.onerror = function() { log('notification error fl'); };
+      n.onclick = function() { log('notification click fl'); };
+      log('created fl');
+    }, 500);
+  }, 2000);
+  log('armed fl');
+};
+document.getElementById('nover').onclick = function() {
+  pageSetTimeout(function() {
+    for (var i = 1; i <= 30; i++) new Notification('Over ' + i, { body: 'overflow', tag: 'ov' + i });
+    log('notified 30');
+  }, 2000);
+};
+document.getElementById('nevict').onclick = function() {
+  pageSetTimeout(function() {
+    var first = new Notification('Evict 0', { body: 'evicted', tag: 'ev0' });
+    first.onclick = function() { log('notification click ev0'); };
+    pageSetTimeout(function() {
+      for (var i = 1; i <= 105; i++) {
+        var n = new Notification('Evict ' + i, { body: 'evicting', tag: 'ev' + i });
+        n.onclick = (function(k) { return function() { log('notification click ev' + k); }; })(i);
+      }
+      log('notified 106');
+    }, 2500);
+  }, 2000);
+};
+document.getElementById('nprobe').onclick = function() {
+  var reads = { title: 0, body: 0, tag: 0, icon: 0 };
+  var title = { toString: function() { reads.title++; return reads.title == 1 ? 'Getter T1' : 'Getter T2'; } };
+  var options = {
+    get body() { reads.body++; return 'body' + reads.body; },
+    get tag() { reads.tag++; return 'probe' + reads.tag; },
+    get icon() { reads.icon++; return knownPixels(); }
+  };
+  var n = new Notification(title, options);
+  var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.kwpeNotification;
+  log('probe reads title=' + reads.title + ' body=' + reads.body + ' tag=' + reads.tag + ' icon=' + reads.icon +
+      ' constructed=' + n.title + '/' + n.body + '/' + n.tag + ' ctor=' + (n.constructor === Notification) +
+      ' instanceof=' + (n instanceof Notification) + ' name=' + Notification.name + ' length=' + Notification.length +
+      ' permission=' + Notification.permission + ' handler=' + (handler ? 'present' : 'absent'));
+  try { Notification('x'); log('probe call without new: no error'); } catch (e) { log('probe call without new: ' + e.name); }
+  n.close();
+};
+document.getElementById('nunicode').onclick = function() {
+  // the 30th character an emoji (a surrogate pair at the cut), the
+  // sender with a right-to-left override
+  later('Mallory ‮evil‬ name', { body: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀 and more', tag: 'u1' });
+};
+window.addEventListener('load', function() {
+  var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.kwpeNotification;
+  log('top kwpe handler ' + (h ? 'present' : 'absent'));
+});
 document.getElementById('replace').onclick = function() {
   setTimeout(function() { location.replace('http://127.0.0.1:8081/other.html'); }, 1500);
   log('replace armed');

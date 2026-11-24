@@ -19,6 +19,7 @@ export PATH=/build/inst/opt/kde3/bin:/opt/kde3/bin:/opt/kde3-qt/bin:/usr/bin:/bi
 export DISPLAY=:55 LANG=C.UTF-8 LC_ALL=C.UTF-8
 export XDG_RUNTIME_DIR=/tmp/xdg; mkdir -p -m 700 $XDG_RUNTIME_DIR
 export KWT_OUT=$O
+export KWHATSAPP_DEBUG=1   # the balloon's text on stderr (kwhatsapp-RUN.log)
 
 ok() { echo "ok $1" | tee -a $SUMMARY; }
 fail() { echo "FAIL $1: $2" | tee -a $SUMMARY; }
@@ -241,6 +242,107 @@ balloon_tests() {
   else fail balloon-closed-by-page "no balloon"; fi
 }
 
+# kwhatsapp's log from line $MARK on (mark: the end of it now)
+mark() { MARK=$(( $(wc -l < $O/kwhatsapp-$RUN.log) + 1 )); }
+since() { tail -n +$MARK $O/kwhatsapp-$RUN.log; }
+# balloon_line N: the Nth balloon's text since the mark (KWHATSAPP_DEBUG)
+balloon_line() { since | grep '^kwhatsapp: balloon [0-9]*:' | sed -n "${1}p"; }
+
+# The notifications' pictures (kde3-wpepart's bridge), the balloon's queue
+bridge_tests() {
+  # a picture of known pixels: exactly these in the balloon
+  python3 -c 'import sys
+sys.stdout.buffer.write(b"P6 40 40 255\n" + bytes(v for y in range(40) for x in range(40) for v in (x * 6, y * 6, 255 - x * 3)))' \
+    > $O/known.ppm
+  convert $O/known.ppm $O/known.png
+  known_pixels() {   # known_pixels STEP SHOT
+    balloon_shot $2
+    convert $O/$2.png +repage $O/$2-r.png   # (import keeps the crop's offset)
+    local r=$(compare -metric AE -subimage-search $O/$2-r.png $O/known.png null: 2>&1)
+    case "$r" in "0 "*|0) ok "$1" ;; *) fail "$1" "compare: $r" ;; esac
+  }
+  front; click 130 775; away
+  if wait_balloon 10; then
+    known_pixels balloon-picture-known-pixels 18-balloon-known-pixels
+    balloon_ignore; wait_no_balloon 3
+  else fail balloon-picture-known-pixels "no balloon"; fi
+
+  # announcements flooding a notification that waits for its picture (5
+  # seconds away), from 2 seconds after the click for 8 seconds; the
+  # notification 2.5 seconds after it: it still waits 2 seconds at most,
+  # its balloon comes before the flood is over
+  front; click 610 775; away
+  if wait_balloon 7; then
+    if grep -q '^flood over' $O/page.log; then fail flood-does-not-hold-back "after the flood"
+    else ok flood-does-not-hold-back; fi
+    check flood-over $O/page.log '^flood over' 15
+    wait_balloon 5 && { balloon_ignore; wait_no_balloon 3; }
+  else fail flood-does-not-hold-back "no balloon 7 s after the click"; check flood-over $O/page.log '^flood over' 15; fi
+
+  # 30 at once: 20 in the queue, the oldest waiting dropped
+  front; mark; click 850 775; away
+  if wait_balloon 10; then
+    sleep 2
+    n=$(since | grep -c 'balloon queue full')
+    [ "$n" = 10 ] && ok balloon-queue-bounded || fail balloon-queue-bounded "$n dropped (10 expected)"
+    balloon_line 1 | grep -q 'Over 1[^0-9]' && ok balloon-queue-first || fail balloon-queue-first "$(balloon_line 1)"
+    balloon_ignore; sleep 1
+    if wait_balloon 5; then
+      balloon_line 2 | grep -q 'Over 12[^0-9]' && ok balloon-queue-oldest-dropped || fail balloon-queue-oldest-dropped "$(balloon_line 2)"
+    else fail balloon-queue-oldest-dropped "no second balloon"; fi
+  else fail balloon-queue-bounded "no balloon"; fi
+  front; sleep 1
+
+  # 106: the part keeps 100; the first one (in the balloon) dropped by it:
+  # the balloon goes, the next one's click works
+  mark; click 1110 775; away
+  if wait_balloon 10; then
+    balloon_line 1 | grep -q 'Evict 0[^0-9]' && ok evict-first-shown || fail evict-first-shown "$(balloon_line 1)"
+    check evict-notified $O/page.log '^notified 106' 15
+    sleep 3
+    next=$(balloon_line 2 | sed -n 's/.*Evict \([0-9]*\).*/\1/p')
+    # (the part keeps Evict 6 to 105; the queue the newest)
+    if [ -n "$next" ] && [ "$next" -ge 6 ]; then ok evict-retires-balloon
+    else fail evict-retires-balloon "next: $(balloon_line 2)"; fi
+    if [ -n "$next" ] && wait_balloon 5; then
+      balloon_view
+      check evict-next-click $O/page.log "^notification click ev$next\$" 10
+    else fail evict-next-click "no balloon"; fi
+  else fail evict-first-shown "no balloon"; fi
+  front; sleep 1
+
+  # the constructor's arguments read once, the same given to WebKit; the
+  # wrapper looks like the constructor; no handler in the page's world
+  click 130 855
+  check constructor-probe $O/page.log '^probe reads title=1 body=1 tag=1 icon=1 constructed=Getter T1/body1/probe1 ctor=true instanceof=true name=Notification length=1 permission=granted handler=absent' 10
+  check constructor-needs-new $O/page.log '^probe call without new: TypeError' 5
+
+  # the sender's override cannot reach the balloon's text; the cut is
+  # not inside the emoji (a surrogate pair)
+  front; mark; click 370 855; away
+  if wait_balloon 10; then
+    balloon_shot 19-balloon-unicode
+    balloon_line 1 > $O/balloon-unicode.txt
+    if python3 -I -c 'import sys
+t = open(sys.argv[1], "rb").read().decode("utf-8")
+assert "‮" not in t, "override kept"
+assert "‪Mallory evil name‬‎" in t, "sender not isolated"
+assert "‪" + "a" * 29 + " ...‬‎" in t, "body cut wrong"
+assert "�" not in t, "a broken character"' $O/balloon-unicode.txt 2> $O/balloon-unicode.err; then
+      ok balloon-unicode-cut-isolated
+    else fail balloon-unicode-cut-isolated "$(tail -1 $O/balloon-unicode.err)"; fi
+    balloon_ignore; wait_no_balloon 3
+  else fail balloon-unicode-cut-isolated "no balloon"; fi
+
+  # last (the page stays tampered): everything replaced, still the right
+  # picture
+  front; click 370 775; away
+  if wait_balloon 10; then
+    known_pixels balloon-picture-tampered-page 20-balloon-tampered
+    balloon_ignore; wait_no_balloon 3
+  else fail balloon-picture-tampered-page "no balloon"; fi
+}
+
 phase_local() {
   RUN=1
   start_app --url http://localhost:8080/app.html || return
@@ -249,6 +351,11 @@ phase_local() {
     || fail permission-default-at-start "$(grep '^load visit=1' $O/page.log)"
   shot 01-start
   memory "test page, after loading"
+  # the bridge's message handler: not in the page's world, of the top or
+  # of a frame of another site; that frame cannot reach the top document
+  check handler-not-in-page $O/page.log '^top kwpe handler absent' 5
+  check handler-not-in-frame $O/page.log '^frame kwpe handler absent' 5
+  check frame-cannot-announce $O/page.log '^frame cannot reach the top document' 5
 
   # notifications: the page asks, kwhatsapp allows, the answer is kept
   click 130 55
@@ -373,6 +480,7 @@ print(s)' "$1"; }
     import -window root -crop $(( $3 + 16 ))x$(( $4 + 16 ))+$(( $1 - 8 ))+$(( $2 - 8 )) $O/11-tray-read.png
     TRAYTOP=$2
     balloon_tests
+    bridge_tests
     front
   fi
 
@@ -471,6 +579,38 @@ EOC
   click 130 55
   check permissions-denial-wins $O/page.log '^permission denied' 10
   quit_app
+
+  # a large font: the balloon no wider than the screen (its lines may
+  # break); the window closed (not to the tray) with the balloon open:
+  # the balloon goes with it
+  printf '[Notifications]\nAllowed=http://localhost:8080\n' > $KDEHOME/share/apps/kwhatsapp/webkit/kwpepart-permissions
+  printf '[MainWindow]\nMenuBar=Disabled\n\n[General]\nCloseToTray=false\n' > $KDEHOME/share/config/kwhatsapprc
+  cp $KDEHOME/share/config/kdeglobals $O/kdeglobals.saved 2> /dev/null
+  printf '\n[General]\nfont=Sans Serif,72,-1,5,50,0,0,0,0,0\n' >> $KDEHOME/share/config/kdeglobals
+  RUN=4
+  : > $O/page.log
+  start_app --url http://localhost:8080/app.html || return
+  check load-4 $O/page.log '^load visit=' 20
+  click 130 675; away
+  if wait_balloon 10; then
+    shot 40-balloon-large-font
+    check balloon-narrowed $O/kwhatsapp-$RUN.log '^kwhatsapp: balloon narrowed' 2
+    [ "$BX" -ge 0 ] && [ $(( BX + BW )) -le 1600 ] && ok balloon-fits-screen || fail balloon-fits-screen "$BX+$BW"
+    /build/netclose "$W"
+    i=0; while kill -0 $APP 2> /dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
+    if kill -0 $APP 2> /dev/null; then fail window-closed-app-ends "still running"; quit_app
+    else
+      wait $APP; rc=$?
+      [ $rc = 0 ] && ok window-closed-app-ends || fail window-closed-app-ends "exit status $rc"
+      b=$(grep -n '^kwhatsapp: balloon destroyed' $O/kwhatsapp-$RUN.log | tail -1 | cut -d: -f1)
+      m=$(grep -n '^kwhatsapp: main window destroyed' $O/kwhatsapp-$RUN.log | cut -d: -f1)
+      [ -n "$b" ] && [ -n "$m" ] && [ "$b" -lt "$m" ] && ok balloon-destroyed-with-window \
+        || fail balloon-destroyed-with-window "balloon line ${b:-none}, window line ${m:-none}"
+      [ -z "$(balloon)" ] && ok balloon-gone-with-window || fail balloon-gone-with-window "still shown"
+    fi
+  else fail balloon-narrowed "no balloon"; quit_app; fi
+  if [ -e $O/kdeglobals.saved ]; then cp $O/kdeglobals.saved $KDEHOME/share/config/kdeglobals
+  else rm -f $KDEHOME/share/config/kdeglobals; fi
 }
 
 phase_whatsapp() {

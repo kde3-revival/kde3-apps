@@ -2,7 +2,7 @@
 # server.py LOG PORT [PORT...]: the test pages of pages/ on 127.0.0.1 and
 # localhost; GET /log?TEXT appends TEXT to LOG (what the page saw);
 # /download/attachment answers with Content-Disposition: attachment.
-import http.server, os, socketserver, sys, threading, urllib.parse
+import http.server, os, socketserver, sys, threading, time, urllib.parse
 
 PAGES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pages')
 LOG = sys.argv[1]
@@ -39,6 +39,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if url.path == '/slow.svg':
+            # a picture that takes 5 seconds
+            time.sleep(5)
+            self.path = '/avatar.svg'
         if url.path == '/avatar.svg':
             # who fetched a notification's picture (WebKit's web process
             # or something else)
