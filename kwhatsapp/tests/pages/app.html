@@ -61,6 +61,8 @@
 <button class="b" id="nclone" style="left:500px;top:820px">failed construction</button>
 <button class="b" id="nnav" style="left:740px;top:820px">queued, navigate</button>
 <button class="b" id="ntwin" style="left:1000px;top:820px">two alike</button>
+<button class="b" id="ncors" style="left:740px;top:340px;height:40px;z-index:1">icon, CORS</button>
+<button class="b" id="nrefused" style="left:740px;top:390px;height:40px;z-index:1">icon, unlisted</button>
 <button class="b" id="nburst" style="left:740px;top:560px;height:40px;z-index:1">burst</button>
 <pre id="out"></pre>
 <script>
@@ -272,6 +274,14 @@ document.getElementById('nunicode').onclick = function() {
 // icon that takes two: the burst drops A's announcement (20 kept); A,
 // shown first, must not get B's picture (nor B, whose announcement A
 // took, A's)
+// a picture of an origin the application lists (tests: 127.0.0.1:8081)
+// that allows CORS; one of an origin not listed (8082)
+document.getElementById('ncors').onclick = function() {
+  later('Cors Picture', { body: 'listed origin, CORS', tag: 'c1', icon: 'http://127.0.0.1:8081/cors/avatar.svg?secret=1' });
+};
+document.getElementById('nrefused').onclick = function() {
+  later('Unlisted Picture', { body: 'origin not listed', tag: 'c2', icon: 'http://127.0.0.1:8082/avatar.svg?secret=2' });
+};
 document.getElementById('nburst').onclick = function() {
   window.burst = [new Notification('Burst', { body: 'alike', icon: '/delay1.svg' })];
   for (var i = 1; i <= 19; i++) window.burst.push(new Notification('Filler ' + i, { body: 'burst', tag: 'f' + i }));

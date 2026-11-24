@@ -149,6 +149,9 @@ EOC
 cat > $KDEHOME/share/config/kwhatsapprc <<'EOC'
 [MainWindow]
 MenuBar=Disabled
+
+[General]
+PictureOrigins=http://127.0.0.1:8081
 EOC
 kdeinit +kded > $O/kdeinit.log 2>&1
 sleep 3
@@ -158,7 +161,7 @@ sleep 2
 kicker > $O/kicker.log 2>&1 &
 sleep 5
 
-python3 -I $T/server.py $O/page.log 8080 8081 2> $O/server.log &
+python3 -I $T/server.py $O/page.log 8080 8081 8082 2> $O/server.log &
 sleep 1
 
 # Kopete's balloon at the tray icon (TX TY: the icon's centre, TRAYTOP)
@@ -392,6 +395,24 @@ assert "\u202a" + "a" * 28 + " ...\u202c" in t, "conjunct cut"' $O/balloon-conju
       else ok twin-no-wrong-picture; fi
     fi
   else fail twin-no-wrong-picture "no balloon"; fi
+
+  # pictures of an origin the application lists: with CORS shown; the
+  # foreign one before (the same origin, no CORS) failed; one of an
+  # origin not listed refused.  The debug lines: scheme and host only.
+  front; click 850 360; away
+  if wait_balloon 10; then
+    balloon_shot 22-balloon-cors
+    n=$(pixels $O/22-balloon-cors.png '#ff0000' 8%)
+    [ "${n:-0}" -gt 300 ] && ok balloon-picture-cors-origin || fail balloon-picture-cors-origin "$n red pixels"
+    balloon_ignore; wait_no_balloon 3
+  else fail balloon-picture-cors-origin "no balloon"; fi
+  check picture-without-cors-reported $O/kwhatsapp-$RUN.log "^kwpe: app: a notification's picture failed: http://127.0.0.1:8081\$" 2
+  front; click 850 410; away
+  check picture-unlisted-reported $O/kwhatsapp-$RUN.log "^kwpe: app: a notification's picture refused: http://127.0.0.1:8082\$" 10
+  wait_balloon 10 && { balloon_ignore; wait_no_balloon 3; }
+  if grep "a notification's picture" $O/kwhatsapp-$RUN.log | grep -qE 'avatar|secret|\?|Picture'; then
+    fail picture-report-host-only "$(grep "a notification's picture" $O/kwhatsapp-$RUN.log | head -3)"
+  else ok picture-report-host-only; fi
 
   # a burst drops an announcement: the notification alike it does not
   # take another one's picture

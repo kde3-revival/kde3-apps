@@ -15,8 +15,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write('%s %s\n' % (self.server.server_address[1], fmt % args))
 
+    def end_headers(self):
+        if getattr(self, 'cors', False):
+            self.send_header('Access-Control-Allow-Origin', '*')
+        super().end_headers()
+
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
+        # /cors/PATH: PATH with Access-Control-Allow-Origin: *
+        self.cors = url.path.startswith('/cors/')
+        if self.cors:
+            self.path = self.path[len('/cors'):]
+            url = urllib.parse.urlsplit(self.path)
         if url.path == '/log':
             with lock, open(LOG, 'a') as f:
                 f.write(urllib.parse.unquote(url.query) + '\n')
