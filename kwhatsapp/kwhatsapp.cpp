@@ -364,6 +364,8 @@ static void notifyWithout( int present, const QString& text, WId window )
 
 void KWhatsApp::slotNotification( int id, const QString& title, const QString& body, const QImage& icon )
 {
+    if ( debug() )
+        fprintf( stderr, "kwhatsapp: notification %d%s: %s\n", id, icon.isNull() ? "" : " with a picture", title.utf8().data() );
     if ( !m_notify )
         return;
     // KNotify: the user chooses in Settings, Configure Notifications (a

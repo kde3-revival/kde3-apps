@@ -393,6 +393,17 @@ assert "\u202a" + "a" * 28 + " ...\u202c" in t, "conjunct cut"' $O/balloon-conju
     fi
   else fail twin-no-wrong-picture "no balloon"; fi
 
+  # a burst drops an announcement: the notification alike it does not
+  # take another one's picture
+  front; mark; click 850 580
+  check burst-notified $O/page.log '^burst notified' 10
+  sleep 6
+  n=$(since | grep -c '^kwhatsapp: notification [0-9]*\( with a picture\)*: Burst$')
+  if [ "$n" != 2 ]; then fail burst-no-wrong-picture "$n of 2 shown"
+  elif since | grep -q '^kwhatsapp: notification [0-9]* with a picture: Burst$'; then
+    fail burst-no-wrong-picture "$(since | grep 'with a picture: Burst')"
+  else ok burst-no-wrong-picture; fi
+
   # last (the page stays tampered): everything replaced, still the right
   # picture
   front; click 370 775; away

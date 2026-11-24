@@ -43,6 +43,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # a picture that takes a second
             time.sleep(1)
             self.path = '/avatar.svg'
+        if url.path == '/delay2.svg':
+            # another picture, that takes two seconds
+            time.sleep(2)
+            self.path = '/avatar2.svg'
         if url.path == '/slow.svg':
             # a picture that takes 5 seconds
             time.sleep(5)

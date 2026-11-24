@@ -61,6 +61,7 @@
 <button class="b" id="nclone" style="left:500px;top:820px">failed construction</button>
 <button class="b" id="nnav" style="left:740px;top:820px">queued, navigate</button>
 <button class="b" id="ntwin" style="left:1000px;top:820px">two alike</button>
+<button class="b" id="nburst" style="left:740px;top:560px;height:40px;z-index:1">burst</button>
 <pre id="out"></pre>
 <script>
 function log(text) {
@@ -267,6 +268,16 @@ document.getElementById('nunicode').onclick = function() {
 // two notifications alike (no tag), the first with an icon that takes a
 // second (WebKit shows it once loaded: the second comes first): the one
 // without an icon never gets the other's picture
+// A with an icon that takes a second, 19 others, B alike with another
+// icon that takes two: the burst drops A's announcement (20 kept); A,
+// shown first, must not get B's picture (nor B, whose announcement A
+// took, A's)
+document.getElementById('nburst').onclick = function() {
+  window.burst = [new Notification('Burst', { body: 'alike', icon: '/delay1.svg' })];
+  for (var i = 1; i <= 19; i++) window.burst.push(new Notification('Filler ' + i, { body: 'burst', tag: 'f' + i }));
+  window.burst.push(new Notification('Burst', { body: 'alike', icon: '/delay2.svg' }));
+  log('burst notified');
+};
 document.getElementById('ntwin').onclick = function() {
   pageSetTimeout(function() {
     var a = new Notification('Twin', { body: 'alike', icon: '/delay1.svg' });
