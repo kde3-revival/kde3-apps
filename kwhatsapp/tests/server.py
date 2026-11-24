@@ -39,6 +39,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if url.path == '/delay1.svg':
+            # a picture that takes a second
+            time.sleep(1)
+            self.path = '/avatar.svg'
         if url.path == '/slow.svg':
             # a picture that takes 5 seconds
             time.sleep(5)

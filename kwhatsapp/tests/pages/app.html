@@ -11,7 +11,7 @@
   #drop { position: absolute; left: 20px; top: 330px; width: 940px; height: 280px; border: 4px dashed #484;
           background: #efe; display: flex; align-items: center; justify-content: center; font-size: 24px; }
   #drop.over { background: #cfc; }
-  #out { position: absolute; left: 1000px; top: 820px; margin: 0; font-size: 11px; height: 100px; overflow: hidden; }
+  #out { position: absolute; left: 1000px; top: 895px; margin: 0; font-size: 11px; height: 40px; overflow: hidden; }
 </style></head>
 <body>
 <button class="b" id="perm" style="left:20px;top:20px">permission</button>
@@ -60,6 +60,7 @@
 <button class="b" id="nunicode" style="left:260px;top:820px">notify unicode</button>
 <button class="b" id="nclone" style="left:500px;top:820px">failed construction</button>
 <button class="b" id="nnav" style="left:740px;top:820px">queued, navigate</button>
+<button class="b" id="ntwin" style="left:1000px;top:820px">two alike</button>
 <pre id="out"></pre>
 <script>
 function log(text) {
@@ -260,6 +261,21 @@ document.getElementById('nunicode').onclick = function() {
   later('Mallory \u202Eevil\u202C name', { body: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa\uD83D\uDE00 and more', tag: 'u1' });
   later('Family ' + 'b'.repeat(31) + '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67 x',
         { body: 'a'.repeat(28) + '\uD83C\uDDF7\uD83C\uDDF4 more', tag: 'u2' });
+  // an Indic conjunct (क्ष: ka, virama, ssa) at the text's cut
+  later('Conjunct', { body: 'a'.repeat(28) + '\u0915\u094D\u0937 more', tag: 'u3' });
+};
+// two notifications alike (no tag), the first with an icon that takes a
+// second (WebKit shows it once loaded: the second comes first): the one
+// without an icon never gets the other's picture
+document.getElementById('ntwin').onclick = function() {
+  pageSetTimeout(function() {
+    var a = new Notification('Twin', { body: 'alike', icon: '/delay1.svg' });
+    a.onshow = function() { log('twin shown icon'); };
+    var b = new Notification('Twin', { body: 'alike' });
+    b.onshow = function() { log('twin shown plain'); };
+    window.twins = [a, b];
+    log('twin notified');
+  }, 2000);
 };
 // a construction that fails (data that cannot be cloned) leaves no
 // announcement: the next one with the same title, body and tag (no

@@ -351,7 +351,17 @@ assert "‪" + "a" * 28 + " ...‬" in t, "text cut wrong"
 assert "🇷" not in t and "👨" not in t, "part of a cluster"' $O/balloon-grapheme.txt 2> $O/balloon-grapheme.err; then
         ok balloon-grapheme-cut
       else fail balloon-grapheme-cut "$(tail -1 $O/balloon-grapheme.err)"; fi
-      balloon_ignore; wait_no_balloon 3
+      balloon_ignore; sleep 1
+      if wait_balloon 5; then
+        balloon_line 3 > $O/balloon-conjunct.txt
+        if python3 -I -c 'import sys
+t = open(sys.argv[1], "rb").read().decode("utf-8")
+assert "Conjunct" in t, "not the third"
+assert "\u202a" + "a" * 28 + " ...\u202c" in t, "conjunct cut"' $O/balloon-conjunct.txt 2> $O/balloon-conjunct.err; then
+          ok balloon-conjunct-cut
+        else fail balloon-conjunct-cut "$(tail -1 $O/balloon-conjunct.err)"; fi
+        balloon_ignore; wait_no_balloon 3
+      else fail balloon-conjunct-cut "no third balloon"; fi
     else fail balloon-grapheme-cut "no second balloon"; fi
   else fail balloon-unicode-cut-isolated "no balloon"; fi
 
@@ -365,6 +375,23 @@ assert "🇷" not in t and "👨" not in t, "part of a cluster"' $O/balloon-grap
     [ "${n:-0}" -lt 20 ] && ok failed-construction-no-picture || fail failed-construction-no-picture "$n red pixels"
     balloon_ignore; wait_no_balloon 3
   else fail failed-construction-no-picture "no balloon"; fi
+
+  # two notifications alike, the first with an icon that takes a second:
+  # the one without an icon never shows the other's picture
+  front; mark; click 1110 855; away
+  check twin-notified $O/page.log '^twin notified' 10
+  if wait_balloon 10; then
+    balloon_ignore; sleep 1; wait_balloon 5; balloon_ignore; wait_no_balloon 3
+    first=$(grep -m1 '^twin shown' $O/page.log | sed 's/^twin shown //')
+    ids=$(since | sed -n 's/^kwhatsapp: balloon \([0-9]*\): .*Twin.*/\1/p' | tr '\n' ' ')
+    set -- $ids
+    if [ $# != 2 ]; then fail twin-no-wrong-picture "balloons: $ids"
+    else
+      plain=$2; [ "$first" = plain ] && plain=$1
+      if since | grep -q "^kwhatsapp: balloon picture $plain\$"; then fail twin-no-wrong-picture "the one without an icon has a picture (shown first: $first)"
+      else ok twin-no-wrong-picture; fi
+    fi
+  else fail twin-no-wrong-picture "no balloon"; fi
 
   # last (the page stays tampered): everything replaced, still the right
   # picture
