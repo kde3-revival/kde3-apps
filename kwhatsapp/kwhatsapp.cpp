@@ -226,8 +226,34 @@ static QString squash( const QString& text, uint length )
 {
     QString line = text.simplifyWhiteSpace();
     if ( line.length() > length )
-        line = line.left( length ) + QString::fromLatin1( " ..." );
+        line = safeLeft( line, length ) + QString::fromLatin1( " ..." );
     return line;
+}
+
+// The page's text in the balloon's sentence: its own direction controls
+// out (they would reach the punctuation and the text around it), then
+// embedded in its direction (its first strong character) and closed with
+// the mark of ours, so it reorders only itself.
+static QString isolated( const QString& text )
+{
+    QString clean;
+    for ( uint i = 0; i < text.length(); ++i ) {
+        ushort c = text[i].unicode();
+        if ( c == 0x200e || c == 0x200f || c == 0x061c || ( c >= 0x202a && c <= 0x202e ) || ( c >= 0x2066 && c <= 0x2069 ) )
+            continue;
+        clean += text[i];
+    }
+    bool rightToLeft = false;
+    for ( uint i = 0; i < clean.length(); ++i ) {
+        QChar::Direction direction = clean[i].direction();
+        if ( direction == QChar::DirL )
+            break;
+        if ( direction == QChar::DirR || direction == QChar::DirAL ) {
+            rightToLeft = true;
+            break;
+        }
+    }
+    return QChar( rightToLeft ? 0x202b : 0x202a ) + clean + QChar( 0x202c ) + QChar( QApplication::reverseLayout() ? 0x200f : 0x200e );
 }
 
 // KNotify's event "message" without its passive popup: the rest of what
@@ -343,7 +369,8 @@ void KWhatsApp::showBalloon()
         text = "<qt><nobr><b>" + QStyleSheet::escape( i18n( "New message" ) ) + "</b></nobr></qt>";
     } else {
         text = i18n( "<qt><nobr><b>New message from %1:</b></nobr><br><nobr>\"%2\"</nobr></qt>" )
-                   .arg( QStyleSheet::escape( squash( message.title, 40 ) ), QStyleSheet::escape( squash( message.body, 30 ) ) );
+                   .arg( QStyleSheet::escape( isolated( squash( message.title, 40 ) ) ),
+                         QStyleSheet::escape( isolated( squash( message.body, 30 ) ) ) );
         if ( !message.icon.isNull() )
             picture.convertFromImage( message.icon );   // at most 48 pixels (slotNotification())
     }

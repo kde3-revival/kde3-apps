@@ -52,11 +52,12 @@ KWhatsAppBalloon::KWhatsAppBalloon( const QString& text, const QPixmap& picture,
         image->setAlignment( Qt::AlignTop );
         layout1->addWidget( image );
     }
-    QLabel* caption = new QLabel( text, this, "text" );
-    caption->setTextFormat( Qt::RichText );
-    caption->setPalette( QToolTip::palette() );
-    caption->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
-    layout1->addWidget( caption );
+    m_text = text;
+    m_caption = new QLabel( text, this, "text" );
+    m_caption->setTextFormat( Qt::RichText );
+    m_caption->setPalette( QToolTip::palette() );
+    m_caption->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
+    layout1->addWidget( m_caption );
 
     // the buttons
     QHBoxLayout* layout2 = new QHBoxLayout( balloonLayout, KDialog::spacingHint() );
@@ -87,6 +88,22 @@ void KWhatsAppBalloon::setAnchor( const QPoint& anchor, bool tail )
     m_anchor = anchor;
     m_tail = tail;
     adjustSize();
+    // Wider than the screen (a narrow one, a large font): the lines of
+    // the text may break, the text as wide as the screen allows.
+    QRect desk = KGlobalSettings::desktopGeometry( m_anchor );
+    int widest = QMAX( 100, desk.width() - 2 * KDialog::marginHint() );
+    if ( width() > widest ) {
+        QString text = m_text;
+        text.replace( "<nobr>", "" );
+        text.replace( "</nobr>", "" );
+        int around = width() - m_caption->width();
+        m_caption->setText( text );
+        m_caption->setSizePolicy( QSizePolicy( QSizePolicy::Fixed, QSizePolicy::Minimum, true ) );
+        m_caption->setFixedWidth( QMAX( 50, widest - around ) );
+        adjustSize();
+        if ( getenv( "KWHATSAPP_DEBUG" ) )
+            fprintf( stderr, "kwhatsapp: balloon narrowed to %d\n", width() );
+    }
     layoutAnchor();
 }
 

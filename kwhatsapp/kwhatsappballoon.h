@@ -59,6 +59,8 @@ protected:
 private:
     void layoutAnchor();
 
+    QString m_text;
+    class QLabel* m_caption;
     QPoint m_anchor;
     bool m_tail;
     bool m_right;    // the anchor is at the right ...
