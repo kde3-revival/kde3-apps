@@ -1,21 +1,23 @@
 #!/bin/bash
-# inner.sh: kwhatsapp's test inside the container (see run.sh): its own X
-# server (Xvfb), KDE (kdeinit, kwin with two desktops, kicker with the
-# system tray), the test pages of server.py; kwhatsapp from /build/inst.
-# Every step writes "ok STEP" or "FAIL STEP: why" to /out/summary.txt;
-# screenshots and logs stay in /out.
+# inner.sh: kwhatsapp's test inside the container (see run.sh) or the
+# sandbox (run-host.sh): its own X server (Xvfb), KDE (kdeinit, kwin with
+# two desktops, kicker with the system tray), the test pages of
+# server.py; kwhatsapp from /build/inst.  Every step writes "ok STEP" or
+# "FAIL STEP: why" to /out/summary.txt; screenshots and logs stay in /out.
+# (KWT_TESTS, KWT_BUILD, KWT_RESULTS: these directories elsewhere.)
 #   PHASES  what to run (default "local"): local (the test page),
 #           whatsapp (https://web.whatsapp.com: its login page, memory)
 set -u
-T=/src/apps/kwhatsapp/tests
-O=/out
+T=${KWT_TESTS:-/src/apps/kwhatsapp/tests}
+O=${KWT_RESULTS:-/out}
+BUILD=${KWT_BUILD:-/build}
 mkdir -p $O
 SUMMARY=$O/summary.txt
 : > $SUMMARY
 export HOME=/tmp/home KDEHOME=/tmp/home/.kde
 rm -rf $HOME; mkdir -p $KDEHOME/share/config $HOME/dl
-export KDEDIRS=/build/inst/opt/kde3:/opt/kde3
-export PATH=/build/inst/opt/kde3/bin:/opt/kde3/bin:/opt/kde3-qt/bin:/usr/bin:/bin
+export KDEDIRS=$BUILD/inst/opt/kde3:/opt/kde3
+export PATH=$BUILD/inst/opt/kde3/bin:/opt/kde3/bin:/opt/kde3-qt/bin:${KWT_TOOLS:+$KWT_TOOLS:}/usr/bin:/bin
 export DISPLAY=:55 LANG=C.UTF-8 LC_ALL=C.UTF-8
 export XDG_RUNTIME_DIR=/tmp/xdg; mkdir -p -m 700 $XDG_RUNTIME_DIR
 export KWT_OUT=$O
@@ -57,7 +59,7 @@ filedialog() {
   sleep 1
   return 0
 }
-# Kopete's balloon (kwhatsappballoon.cpp): its caption is "New message"
+# the balloon (KBalloon): its caption is "New message"
 balloon() { xdotool search --onlyvisible --name '^New message$' 2> /dev/null | head -1; }
 wait_balloon() {   # wait_balloon SECONDS: B and its geometry BX BY BW BH
   local i=0
@@ -74,9 +76,10 @@ wait_no_balloon() {
   return 1
 }
 balloon_shot() { import -window root -crop ${BW}x${BH}+${BX}+${BY} "$O/$1.png" 2> /dev/null; }
-# the balloon's buttons: View left of its centre, Ignore right of it
-balloon_view() { xdotool mousemove $(( BX + BW / 2 - 40 )) $(( BY + BH - 36 )) sleep 0.2 click 1; }
-balloon_ignore() { xdotool mousemove $(( BX + BW / 2 + 40 )) $(( BY + BH - 36 )) sleep 0.2 click 1; }
+# the balloon's buttons (KBalloon's, at its bottom right, over the tail
+# at the tray icon): View, then Ignore
+balloon_view() { xdotool mousemove $(( BX + BW - 141 )) $(( BY + BH - 42 )) sleep 0.2 click 1; }
+balloon_ignore() { xdotool mousemove $(( BX + BW - 65 )) $(( BY + BH - 42 )) sleep 0.2 click 1; }
 pixels() {   # pixels FILE COLOUR FUZZ: how many pixels of about that colour
   convert "$1" -alpha off -fuzz "$3" -fill black +opaque "$2" -fill white -opaque "$2" \
           -format '%[fx:round(mean*w*h)]' info: 2> /dev/null || echo 0
@@ -123,9 +126,13 @@ quit_app() {
 # --- the desktop -------------------------------------------------------
 Xvfb :55 -screen 0 1600x1000x24 -nolisten tcp > $O/xvfb.log 2>&1 &
 sleep 2
-cat > $KDEHOME/share/config/kwinrc <<'EOC'
+cat > $KDEHOME/share/config/kwinrc <<EOC
 [Desktops]
 Number=2
+
+[Compositing]
+Enabled=${COMPOSITING:-true}
+Backend=xrender
 EOC
 # the "browser" and the "mail program": logurl.sh
 cat > $KDEHOME/share/config/kfmclientrc <<EOC
@@ -164,7 +171,7 @@ sleep 5
 python3 -I $T/server.py $O/page.log 8080 8081 8082 2> $O/server.log &
 sleep 1
 
-# Kopete's balloon at the tray icon (TX TY: the icon's centre, TRAYTOP)
+# the balloon at the tray icon (TX TY: the icon's centre, TRAYTOP)
 balloon_tests() {
   # a data: picture; the tail at the icon; a click on the balloon: the chat
   front; click 130 675
@@ -236,6 +243,26 @@ balloon_tests() {
       xwininfo -id "$W" | grep -q IsViewable && ok balloon-view-shows-window || fail balloon-view-shows-window "not shown"
     else fail balloon-queue-next "no second balloon"; fi
   else fail balloon-queue-next "no balloon"; fi
+
+  # dismissed without a signal (KBalloon closes on a right or middle
+  # click): the next one comes; the dismissed one does not come back
+  front; mark; click 850 675; away
+  if wait_balloon 10; then
+    xdotool mousemove $(( BX + 46 )) $(( BY + 46 )) sleep 0.2 click 3
+    sleep 1
+    if wait_balloon 5 && balloon_line 2 | grep -q 'Queue Two'; then
+      ok balloon-right-click-next
+      xdotool mousemove $(( BX + 46 )) $(( BY + 46 )) sleep 0.2 click 2
+      wait_no_balloon 3 && ok balloon-middle-click-closes || fail balloon-middle-click-closes "still shown"
+      # a new notification: only it, not the dismissed ones again
+      front; click 130 675; away
+      if wait_balloon 10; then
+        balloon_line 3 | grep -q 'Bob Picture' && ok balloon-dismissed-not-again || fail balloon-dismissed-not-again "$(balloon_line 3)"
+        balloon_ignore; wait_no_balloon 3
+      else fail balloon-dismissed-not-again "no balloon"; fi
+    else fail balloon-right-click-next "$(balloon_line 2)"; fi
+    since | grep -q '^kwhatsapp: balloon dismissed: ' || fail balloon-dismissed-reported "no line"
+  else fail balloon-right-click-next "no balloon"; fi
 
   # the page closes its notification: the balloon goes
   front; click 1110 675; away
@@ -561,7 +588,7 @@ phase_local() {
   # drag and drop: files from another application onto the page
   head -c 300000 /dev/urandom > $HOME/photo.jpg
   printf 'dropped text\n' > $HOME/note.txt
-  /build/dragsource $HOME/note.txt $HOME/photo.jpg > $O/dragsource.log 2>&1 &
+  $BUILD/dragsource $HOME/note.txt $HOME/photo.jpg > $O/dragsource.log 2>&1 &
   DRAG=$!
   sleep 2
   S=$(window '^dragsource$')
@@ -743,9 +770,8 @@ EOC
   click 130 675; away
   if wait_balloon 10; then
     shot 40-balloon-large-font
-    check balloon-narrowed $O/kwhatsapp-$RUN.log '^kwhatsapp: balloon narrowed' 2
     [ "$BX" -ge 0 ] && [ $(( BX + BW )) -le 1600 ] && ok balloon-fits-screen || fail balloon-fits-screen "$BX+$BW"
-    /build/netclose "$W"
+    $BUILD/netclose "$W"
     i=0; while kill -0 $APP 2> /dev/null && [ $i -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
     if kill -0 $APP 2> /dev/null; then fail window-closed-app-ends "still running"; quit_app
     else
@@ -757,7 +783,7 @@ EOC
         || fail balloon-destroyed-with-window "balloon line ${b:-none}, window line ${m:-none}"
       [ -z "$(balloon)" ] && ok balloon-gone-with-window || fail balloon-gone-with-window "still shown"
     fi
-  else fail balloon-narrowed "no balloon"; quit_app; fi
+  else fail balloon-fits-screen "no balloon"; quit_app; fi
   if [ -e $O/kdeglobals.saved ]; then cp $O/kdeglobals.saved $KDEHOME/share/config/kdeglobals
   else rm -f $KDEHOME/share/config/kdeglobals; fi
 }

@@ -48,7 +48,7 @@ New applications of the revival:
 | Directory     | Application    | What it is                                                      |
 |---------------|----------------|-----------------------------------------------------------------|
 | `kbluetooth/` | kbluetooth     | Bluetooth applet of the system tray on BlueZ 5: power, connect, pair (with its pairing agent) |
-| `kwhatsapp/`  | KWhatsApp      | WhatsApp Web (WhatsApp's own web client) as a KDE application: its own window and login, a tray icon with the unread count, notifications through KNotify, shown as Kopete's balloon at the tray icon with the sender's picture; WPE WebKit through kde3-wpepart's KWPEPart (app mode) |
+| `kwhatsapp/`  | KWhatsApp      | WhatsApp Web (WhatsApp's own web client) as a KDE application: its own window and login, a tray icon with the unread count, notifications through KNotify, shown as a balloon (KBalloon) at the tray icon with the sender's picture; WPE WebKit through kde3-wpepart's KWPEPart (app mode) |
 
 The handbook of each application is in `doc/<application>/`
 (`doc/kinfocenter/blockdevices/` belongs to KDiskFree).

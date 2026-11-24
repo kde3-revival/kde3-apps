@@ -5,7 +5,11 @@
 # inner.sh (PHASES: local, whatsapp; default local) with its results in
 # WORK/out-PHASES (summary.txt, screenshots, logs, memory.txt).
 #   IMAGE      default localhost/kwhatsapp-test (see Containerfile)
-#   KDE3_PREFIX, QT3_PREFIX  mounted read-only (default /opt/kde3, /opt/kde3-qt)
+#   KDE3_PREFIX, QT3_PREFIX  mounted read-only (default /opt/kde3, /opt/kde3-qt;
+#              Qt also at its own path, where the libraries' run path has it)
+#   EXTRA_LIBS a directory of libraries the machine's KDE needs that the
+#              image has not (e.g. a newer libssl), on LD_LIBRARY_PATH
+#   COMPOSITING KWin's compositing (default true; false: none)
 # "local" runs without a network (--network=none); "whatsapp" needs one.
 set -u
 A=$(cd "$1" && pwd); P=$(cd "$2" && pwd); mkdir -p "$3"; W=$(cd "$3" && pwd)
@@ -17,7 +21,13 @@ common=(--rm --security-opt label=disable --shm-size=512m
         -v "$A":/src/apps:ro -v "$P":/src/wpe:ro -v "$W/build":/build)
 # KDE3_PREFIX=image: the image's own kde3 packages (a machine whose
 # /opt/kde3 is not built for Fedora 44)
-[ "$KDE3_PREFIX" = image ] || common+=(-v "$KDE3_PREFIX":/opt/kde3:ro -v "$QT3_PREFIX":/opt/kde3-qt:ro)
+if [ "$KDE3_PREFIX" != image ]; then
+  KDE3_PREFIX=$(readlink -f "$KDE3_PREFIX"); QT3_PREFIX=$(readlink -f "$QT3_PREFIX")
+  common+=(-v "$KDE3_PREFIX":/opt/kde3:ro -v "$QT3_PREFIX":/opt/kde3-qt:ro)
+  [ "$QT3_PREFIX" != /opt/kde3-qt ] && common+=(-v "$QT3_PREFIX":"$QT3_PREFIX":ro)
+fi
+[ -n "${EXTRA_LIBS:-}" ] && common+=(-v "$(readlink -f "$EXTRA_LIBS")":/extra-libs:ro -e LD_LIBRARY_PATH=/extra-libs)
+common+=(-e COMPOSITING="${COMPOSITING:-true}")
 if [ ! -x "$W/build/inst/opt/kde3/bin/kwhatsapp" ] || [ -n "${REBUILD:-}" ]; then
   podman run "${common[@]}" --network=none "$IMAGE" /src/apps/kwhatsapp/tests/build.sh || exit 1
 fi
