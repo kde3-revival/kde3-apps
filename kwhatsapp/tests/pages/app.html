@@ -64,6 +64,7 @@
 <button class="b" id="ncors" style="left:740px;top:340px;height:40px;z-index:1">icon, CORS</button>
 <button class="b" id="nrefused" style="left:740px;top:390px;height:40px;z-index:1">icon, unlisted</button>
 <button class="b" id="nredirect" style="left:740px;top:440px;height:40px;z-index:1">icon, redirected</button>
+<button class="b" id="nhuge" style="left:740px;top:605px;height:30px;z-index:1">icon, endless</button>
 <button class="b" id="nbigburst" style="left:740px;top:490px;height:40px;z-index:1">burst of 86</button>
 <button class="b" id="nburst" style="left:740px;top:560px;height:40px;z-index:1">burst</button>
 <pre id="out"></pre>
@@ -293,6 +294,11 @@ document.getElementById('nredirect').onclick = function() {
   later('Redirected Picture', { body: 'listed origin, redirected', tag: 'c3',
                                 icon: 'http://127.0.0.1:8081/cors/redirect?to=' +
                                       encodeURIComponent('http://127.0.0.1:8082/cors/avatar.svg?redirected=1') });
+};
+// a picture of a listed origin whose body does not end (more than the
+// bridge takes): cancelled once past 4 MiB
+document.getElementById('nhuge').onclick = function() {
+  later('Endless Picture', { body: 'listed origin, endless', tag: 'c4', icon: 'http://127.0.0.1:8081/cors/huge.svg' });
 };
 function notifyBurst(title, others) {
   var list = [new Notification(title, { body: 'alike', icon: '/delay.svg?ms=400&' + title.length })];

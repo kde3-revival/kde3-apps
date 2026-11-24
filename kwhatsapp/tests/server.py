@@ -53,6 +53,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # a picture that takes a second
             time.sleep(1)
             self.path = '/avatar.svg'
+        if url.path == '/huge.svg':
+            # an endless picture: 256 KiB every 50 ms (5 MiB/s, up to 16
+            # MiB); how much went before the reader closed, logged as
+            # "huge sent BYTES accept=ACCEPT"
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/svg+xml')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            chunk, sent = b' ' * 262144, 0
+            try:
+                self.wfile.write(b'<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9"><!--')
+                while sent < 16 << 20:
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                    sent += len(chunk)
+                    time.sleep(0.05)
+            except OSError:
+                pass
+            sys.stderr.write('%s huge sent %d accept=%s\n' % (self.server.server_address[1], sent,
+                                                              self.headers.get('Accept', '')))
+            self.close_connection = True
+            return
         if url.path == '/delay.svg':
             # ?ms=MS[&blue]: the red picture (blue: avatar2.svg) MS
             # milliseconds later (at most 1400: below the bridge's

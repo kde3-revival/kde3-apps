@@ -406,6 +406,21 @@ assert "\u202a" + "a" * 28 + " ...\u202c" in t, "conjunct cut"' $O/balloon-conju
   if since | grep -q "^kwpe: app: a notification's picture failed: http://127.0.0.1:8081\$"; then
     ok redirected-picture-reported
   else fail redirected-picture-reported "$(since | grep "a notification's picture")"; fi
+  # a picture whose body does not end (5 MiB/s): the bridge's fetch
+  # cancelled once past 4 MiB, long before its 1.5 seconds (WebKit's own
+  # icon load reads all 16 MiB: the fewest bytes sent are the bridge's);
+  # no picture, reported failed
+  front; mark; click 850 620; away
+  if waitfor $O/server.log '^8081 huge sent [0-9]+ accept=\*/\*$' 15; then
+    n=$(sed -n 's|^8081 huge sent \([0-9]*\) accept=\*/\*$|\1|p' $O/server.log | sort -n | head -1)
+    [ "$n" -lt $(( 6 << 20 )) ] && ok endless-picture-cancelled || fail endless-picture-cancelled "$n bytes sent"
+  else fail endless-picture-cancelled "$(grep 'huge sent' $O/server.log)"; fi
+  i=0
+  until since | grep -q "^kwpe: app: a notification's picture failed: http://127.0.0.1:8081\$" || [ $i -ge 20 ]; do
+    sleep 0.25; i=$((i + 1))
+  done
+  [ $i -lt 20 ] && ok endless-picture-reported || fail endless-picture-reported "$(since | grep "a notification's picture")"
+  wait_balloon 15 && { balloon_ignore; wait_no_balloon 3; }
   if grep "a notification's picture" $O/kwhatsapp-$RUN.log | grep -qE 'avatar|secret|\?|Picture'; then
     fail picture-report-host-only "$(grep "a notification's picture" $O/kwhatsapp-$RUN.log | head -3)"
   else ok picture-report-host-only; fi
