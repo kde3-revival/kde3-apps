@@ -208,15 +208,73 @@ void KWhatsApp::slotTitleChanged( const QString& title )
         m_tray->setUnread( m_unread );
 }
 
+// The code point at @p i of @p s (a surrogate pair's whole one), and
+// the one before @p i.
+static uint codePointAt( const QString& s, uint i )
+{
+    ushort c = s[i].unicode();
+    if ( c >= 0xd800 && c <= 0xdbff && i + 1 < s.length() ) {
+        ushort d = s[i + 1].unicode();
+        if ( d >= 0xdc00 && d <= 0xdfff )
+            return 0x10000 + ( ( c - 0xd800 ) << 10 ) + ( d - 0xdc00 );
+    }
+    return c;
+}
+
+static uint codePointBefore( const QString& s, uint i )
+{
+    ushort c = s[i - 1].unicode();
+    if ( c >= 0xdc00 && c <= 0xdfff && i >= 2 ) {
+        ushort h = s[i - 2].unicode();
+        if ( h >= 0xd800 && h <= 0xdbff )
+            return 0x10000 + ( ( h - 0xd800 ) << 10 ) + ( c - 0xdc00 );
+    }
+    return c;
+}
+
+static bool isRegionalIndicator( uint c )
+{
+    return c >= 0x1f1e6 && c <= 0x1f1ff;
+}
+
+// Unicode's grapheme cluster boundaries (UAX #29), the ones a cut of
+// a sender's name or a message meets: none inside a surrogate pair,
+// before an extending character (combining marks, ZWJ, variation
+// selectors, emoji modifiers, tag characters, Hangul vowel and final
+// jamo), after a ZWJ (emoji sequences) or inside a pair of regional
+// indicators (a flag).
+static bool isGraphemeBoundary( const QString& s, uint i )
+{
+    if ( i == 0 || i >= s.length() )
+        return true;
+    ushort u = s[i].unicode();
+    if ( u >= 0xdc00 && u <= 0xdfff )
+        return false;
+    uint c = codePointAt( s, i );
+    if ( s[i].isMark() || c == 0x200d || ( c >= 0xfe00 && c <= 0xfe0f ) || ( c >= 0xe0100 && c <= 0xe01ef )
+         || ( c >= 0x1f3fb && c <= 0x1f3ff ) || ( c >= 0xe0020 && c <= 0xe007f ) || ( c >= 0x1160 && c <= 0x11ff ) )
+        return false;
+    if ( codePointBefore( s, i ) == 0x200d )
+        return false;
+    if ( isRegionalIndicator( c ) ) {
+        uint before = 0;
+        for ( uint j = i; j > 0 && isRegionalIndicator( codePointBefore( s, j ) ); j -= 2 )
+            ++before;
+        if ( before % 2 )
+            return false;
+    }
+    return true;
+}
+
 // The first @p length characters (UTF-16 units) of @p text at most, cut
-// before a whole character: not inside a surrogate pair, not between a
-// character and its combining marks.
+// at a grapheme boundary: whole characters as they are shown (a flag,
+// an emoji sequence, a letter with its marks), never half of one.
 static QString safeLeft( const QString& text, uint length )
 {
     if ( text.length() <= length )
         return text;
     uint n = length;
-    while ( n > 0 && ( text[n].isMark() || ( text[n].unicode() >= 0xdc00 && text[n].unicode() <= 0xdfff ) ) )
+    while ( n > 0 && !isGraphemeBoundary( text, n ) )
         --n;
     return text.left( n );
 }
