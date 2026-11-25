@@ -340,6 +340,106 @@ public:
     }
 };
 
+namespace
+{
+
+/** The Today card: the rest of today, not the whole day. */
+struct RestOfDay
+{
+    double tmax;
+    double tmin;
+    double precip;      // noValue: unknown
+    double prob;        // noValue: unknown
+    int code;
+    bool day;
+    const WeatherLib::Units *units;
+};
+
+// At least these many hours: late in the evening the hours after
+// midnight complete the rest of the day.
+const int minRestHours = 3;
+
+/** @p code without its precipitation: the clouds it falls from. */
+int dryCode(int code)
+{
+    if (code >= 80 && code <= 86)       // showers: sun and clouds between them
+        return 2;
+    if (code >= 50)                     // drizzle, rain, snow, thunderstorm
+        return 3;
+    return code;
+}
+
+/**
+ * The rest of today at the location, from the hours of the forecast
+ * (that of the hour in progress on): the highest and the lowest
+ * temperature (with the current one), the precipitation still to come,
+ * the most significant weather (the highest WMO code, as Open-Meteo
+ * makes the code of a day) and no precipitation in it when none is to
+ * come.  The night icon when the sun is down now and does not rise
+ * again today, as the current weather shows it then.  False if there
+ * are no hours for today.
+ */
+bool restOfToday(const WeatherLib::Data *d, long t, RestOfDay *r)
+{
+    // the hours of ICON-EU for the hybrid model, those of ECMWF only if
+    // it has none (it starts with today)
+    const QValueList<Hour> *source = &d->hours;
+    r->units = &d->hourUnits;
+    if (source->isEmpty()) {
+        source = &d->laterHours;
+        r->units = &d->laterUnits;
+    }
+    QDate today = d->local(t).date();
+    QValueList<Hour> rest;
+    QValueList<Hour>::ConstIterator it = source->begin();
+    for (; it != source->end(); ++it) {
+        const Hour &h = *it;
+        if (h.time <= t)
+            continue;
+        // the hour (time - 1 h, time]: today if it starts today
+        if (d->local(h.time - 1).date() != today && int(rest.count()) >= minRestHours)
+            break;
+        rest.append(h);
+    }
+    if (rest.isEmpty() || d->local(rest.first().time - 1).date() != today)
+        return false;
+
+    r->tmax = r->tmin = noValue;
+    if (d->hasCurrent && d->currentUnits.temperature == r->units->temperature)
+        r->tmax = r->tmin = d->current.temp;
+    r->precip = 0;
+    r->prob = noValue;
+    r->code = -1;
+    r->day = d->hasCurrent && d->current.day;
+    int wet = -1;
+    for (it = rest.begin(); it != rest.end(); ++it) {
+        const Hour &h = *it;
+        if (!valid(r->tmax) || h.temp > r->tmax)
+            r->tmax = h.temp;
+        if (!valid(r->tmin) || h.temp < r->tmin)
+            r->tmin = h.temp;
+        if (!valid(h.precip))
+            r->precip = noValue;    // unknown is not dry
+        else if (valid(r->precip))
+            r->precip += h.precip;
+        if (valid(h.prob) && (!valid(r->prob) || h.prob > r->prob))
+            r->prob = h.prob;
+        if (h.code > wet)
+            wet = h.code;
+        if (h.code >= 0 && dryCode(h.code) > r->code)
+            r->code = dryCode(h.code);
+        if (h.day)
+            r->day = true;
+    }
+    // the weather with precipitation only when an amount is to come
+    // that the card shows (see shownPrecipitation())
+    if (!valid(r->precip) || millimeters(r->precip, *r->units) >= 0.05)
+        r->code = wet;
+    return true;
+}
+
+}
+
 WeatherLib::WeatherLib(QObject *parent, const char *name)
 	: QObject(parent, name),
 	  m_server(WeatherServers::forecast()), m_pressureUnit("hPa")
@@ -384,18 +484,25 @@ WeatherLib::Data* WeatherLib::findData(const QString &id)
 {
 	Data *d = m_data[id];
 	if (!d) {
-		double lat, lon;
-		QString model;
-		if (!WeatherModels::parseLocationId(id, &lat, &lon, &model))
-			return 0;
-		d = new Data;
-		d->id = id;
-		d->latitude = lat;
-		d->longitude = lon;
-		d->model = model;
-		m_data.insert(id, d);
-		getData(d);
+		d = newData(id);
+		if (d)
+			getData(d);
 	}
+	return d;
+}
+
+WeatherLib::Data* WeatherLib::newData(const QString &id)
+{
+	double lat, lon;
+	QString model;
+	if (!WeatherModels::parseLocationId(id, &lat, &lon, &model))
+		return 0;
+	Data *d = new Data;
+	d->id = id;
+	d->latitude = lat;
+	d->longitude = lon;
+	d->model = model;
+	m_data.insert(id, d);
 	return d;
 }
 
@@ -466,6 +573,69 @@ void WeatherLib::startJob(Data *d, const QString &model, bool current,
 	++d->pending;
 }
 
+QString WeatherLib::takeAnswer(Data *d, const Request &r, const QByteArray &answer)
+{
+	bool ok = false;
+	QVariant root = Json::parse(answer, &ok);
+	if (!ok || root.type() != QVariant::Map)
+		return i18n("The answer of Open-Meteo could not be read.");
+	QVariant err = Json::member(root, "error");
+	if (err.type() == QVariant::Bool && err.toBool()) {
+		QString reason = Json::member(root, "reason").toString().stripWhiteSpace().left(200);
+		return reason.isEmpty() ? i18n("Open-Meteo refused the request.") : reason;
+	}
+	Current current;
+	QValueList<Hour> hours;
+	QValueList<Day> days;
+	if ((r.current && !parseCurrent(root, &current))
+	    || (r.hourly && !parseHours(root, &hours))
+	    || (r.daily && !parseDays(root, &days)))
+		return i18n("The answer of Open-Meteo is incomplete.");
+
+	// all requested parts are good: take them together
+	QString zone = Json::member(root, "timezone").toString();
+	d->zone = LocalTime::isZone(zone) ? zone : QString::null;
+	double offset = number(Json::member(root, "utc_offset_seconds"), -18 * 3600, 18 * 3600);
+	d->utcOffset = valid(offset) ? static_cast<long>(offset) : 0;
+	if (r.current) {
+		d->current = current;
+		d->currentUnits = r.units;
+		d->hasCurrent = true;
+	}
+	if (r.hourly && r.later) {
+		d->laterHours = hours;
+		d->laterUnits = r.units;
+	} else if (r.hourly) {
+		d->hours = hours;
+		d->hourUnits = r.units;
+	}
+	if (r.daily) {
+		d->days = days;
+		d->dayUnits = r.units;
+	}
+	return QString::null;
+}
+
+bool WeatherLib::setAnswer(const QString &id, const QByteArray &answer)
+{
+	Data *d = m_data[id];
+	if (!d) {
+		d = newData(id);
+		if (!d)
+			return false;
+	}
+	Request r;
+	r.id = id;
+	r.current = r.hourly = r.daily = true;
+	r.later = false;
+	r.units = m_units;
+	d->error = takeAnswer(d, r, answer);
+	if (d->error.isEmpty())
+		d->fetched = QDateTime::currentDateTime();
+	emit fileUpdate(id);
+	return d->error.isEmpty();
+}
+
 void WeatherLib::slotDownloadDone(Download *download, const QByteArray &answer,
                                   const QString &downloadError)
 {
@@ -480,47 +650,8 @@ void WeatherLib::slotDownloadDone(Download *download, const QByteArray &answer,
 	--d->pending;
 
 	QString error = downloadError;
-	if (error.isEmpty()) {
-		bool ok = false;
-		QVariant root = Json::parse(answer, &ok);
-		QVariant err = Json::member(root, "error");
-		Current current;
-		QValueList<Hour> hours;
-		QValueList<Day> days;
-		if (!ok || root.type() != QVariant::Map) {
-			error = i18n("The answer of Open-Meteo could not be read.");
-		} else if (err.type() == QVariant::Bool && err.toBool()) {
-			error = Json::member(root, "reason").toString().stripWhiteSpace().left(200);
-			if (error.isEmpty())
-				error = i18n("Open-Meteo refused the request.");
-		} else if ((r.current && !parseCurrent(root, &current))
-		           || (r.hourly && !parseHours(root, &hours))
-		           || (r.daily && !parseDays(root, &days))) {
-			error = i18n("The answer of Open-Meteo is incomplete.");
-		} else {
-			// all requested parts are good: take them together
-			QString zone = Json::member(root, "timezone").toString();
-			d->zone = LocalTime::isZone(zone) ? zone : QString::null;
-			double offset = number(Json::member(root, "utc_offset_seconds"), -18 * 3600, 18 * 3600);
-			d->utcOffset = valid(offset) ? static_cast<long>(offset) : 0;
-			if (r.current) {
-				d->current = current;
-				d->currentUnits = r.units;
-				d->hasCurrent = true;
-			}
-			if (r.hourly && r.later) {
-				d->laterHours = hours;
-				d->laterUnits = r.units;
-			} else if (r.hourly) {
-				d->hours = hours;
-				d->hourUnits = r.units;
-			}
-			if (r.daily) {
-				d->days = days;
-				d->dayUnits = r.units;
-			}
-		}
-	}
+	if (error.isEmpty())
+		error = takeAnswer(d, r, answer);
 	if (!error.isEmpty()) {
 		kdDebug(12006) << "Open-Meteo, " << r.id << ": " << error << endl;
 		if (d->error.isEmpty())
@@ -725,7 +856,8 @@ QStringList WeatherLib::daily(const QString &id)
 	Data *d = findData(id);
 	if (!d)
 		return list;
-	QDate today = d->local(now()).date();
+	long t = now();
+	QDate today = d->local(t).date();
 	QValueList<Day>::ConstIterator it = d->days.begin();
 	for (; it != d->days.end(); ++it) {
 		const Day &dy = *it;
@@ -733,6 +865,16 @@ QStringList WeatherLib::daily(const QString &id)
 		QDate date = d->local(dy.time + 12 * 3600).date();
 		if (date < today)	// an old download
 			continue;
+		RestOfDay r;
+		if (date == today && restOfToday(d, t, &r)) {
+			list.append(date.toString(Qt::ISODate) + '\t'
+			            + WeatherIcons::iconName(r.code, r.day) + '\t'
+			            + formatTemperature(r.tmax, *r.units) + '\t'
+			            + formatTemperature(r.tmin, *r.units) + '\t'
+			            + shownPrecipitation(r.precip, *r.units) + '\t'
+			            + percent(r.prob) + '\t' + WeatherIcons::description(r.code));
+			continue;
+		}
 		list.append(date.toString(Qt::ISODate) + '\t'
 		            + WeatherIcons::iconName(dy.code, true) + '\t'
 		            + formatTemperature(dy.tmax, d->dayUnits) + '\t'
@@ -791,13 +933,24 @@ QStringList WeatherLib::dailyValues(const QString &id)
 	Data *d = findData(id);
 	if (!d)
 		return list;
-	QDate today = d->local(now()).date();
+	long t = now();
+	QDate today = d->local(t).date();
 	QValueList<Day>::ConstIterator it = d->days.begin();
 	for (; it != d->days.end(); ++it) {
 		const Day &dy = *it;
 		QDate date = d->local(dy.time + 12 * 3600).date();
 		if (date < today)
 			continue;
+		RestOfDay r;
+		if (date == today && restOfToday(d, t, &r)) {
+			list.append(date.toString(Qt::ISODate) + '\t'
+			            + WeatherIcons::iconName(r.code, r.day) + '\t'
+			            + cNumber(r.tmax, 1) + '\t' + cNumber(r.tmin, 1) + '\t'
+			            + cNumber(r.precip, 2) + '\t' + cNumber(r.prob, 0) + '\t'
+			            + WeatherIcons::description(r.code) + '\t'
+			            + temperatureUnit(*r.units) + '\t' + precipitationUnit(*r.units));
+			continue;
+		}
 		list.append(date.toString(Qt::ISODate) + '\t'
 		            + WeatherIcons::iconName(dy.code, true) + '\t'
 		            + cNumber(dy.tmax, 1) + '\t' + cNumber(dy.tmin, 1) + '\t'

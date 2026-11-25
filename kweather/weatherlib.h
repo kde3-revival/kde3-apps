@@ -88,6 +88,14 @@ class WeatherLib : public QObject
 
 		QStringList stations();
 
+		/**
+		 * Takes @p answer, a complete answer of Open-Meteo (current,
+		 * hourly and daily) for the location @p id, as if it had been
+		 * downloaded: canned data, e.g. for tests.  False if it is no
+		 * good (see error()).
+		 */
+		bool setAnswer(const QString &id, const QByteArray &answer);
+
 		void update(const QString &id);
 		void forceUpdate(const QString &id);
 		void remove(const QString &id);
@@ -113,6 +121,8 @@ class WeatherLib : public QObject
 		};
 
 		Data* findData(const QString &id);
+		Data* newData(const QString &id);
+		QString takeAnswer(Data *d, const Request &r, const QByteArray &answer);
 		void getData(Data *d, bool force = false);
 		void startJob(Data *d, const QString &model, bool current,
 		              bool hourly, bool daily, bool later = false);
