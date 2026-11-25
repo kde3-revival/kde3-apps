@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/utsname.h>
 
 #include <qbitmap.h>
 #include <qcheckbox.h>
@@ -30,6 +31,7 @@
 #include <qvgroupbox.h>
 #include <qwhatsthis.h>
 
+#include <kaboutdata.h>
 #include <kaction.h>
 #include <kapplication.h>
 #include <kballoon.h>
@@ -195,11 +197,19 @@ KWhatsApp::~KWhatsApp()
 }
 
 // WhatsApp Web refuses browsers it does not know ("browser not
-// supported"); WPE WebKit's own User-Agent says what it is (Safari on
-// Linux), which it takes.  The setting [General] UserAgent overrides it.
+// supported").  Safari's user agent on Linux, KWhatsApp named after it (WhatsApp lists
+// the linked device as "Safari (Linux)").  WebKit's own would be replaced
+// for web.whatsapp.com by a Mac's (its site-specific quirks), and
+// WhatsApp then offers its Mac application.  The setting [General]
+// UserAgent overrides it.
 QString KWhatsApp::defaultUserAgent()
 {
-    return QString::null;
+    struct utsname name;
+    QString machine = uname( &name ) == 0 ? QString::fromLatin1( name.machine ) : QString::fromLatin1( "x86_64" );
+    const KAboutData* about = KGlobal::instance() ? KGlobal::instance()->aboutData() : 0;
+    QString version = about ? about->version() : QString::fromLatin1( "0.1" );
+    return QString::fromLatin1( "Mozilla/5.0 (X11; Linux %1) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                                "Version/18.5 Safari/605.1.15 KWhatsApp/%2" ).arg( machine ).arg( version );
 }
 
 void KWhatsApp::readSettings()
