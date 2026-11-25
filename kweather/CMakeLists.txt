@@ -80,6 +80,11 @@ if(NOT COMMAND _kde3_generated_by_one_target)
   endforeach()
 endif()
 
+option(KDE3_APPS_KWEATHER_TESTS "Build kweathertodaytest, a test of the forecast of today with canned data (not installed)" OFF)
+if(KDE3_APPS_KWEATHER_TESTS)
+  add_subdirectory(tests)
+endif()
+
 kde3_install_icons(kweather)
 
 install(FILES kweather.desktop DESTINATION ${KDE3_DATA_INSTALL_DIR}/kicker/applets)
