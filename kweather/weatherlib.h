@@ -94,10 +94,10 @@ class WeatherLib : public QObject
 		 * tests.  Current, hourly and daily, or with @p later hourly
 		 * and daily of the second model of the hybrid one (ECMWF).
 		 * False if it is no good (see error()); the data from before
-		 * stays then.
+		 * stays then.  In @p units, by default those of setUnits().
 		 */
 		bool setAnswer(const QString &id, const QByteArray &answer,
-		               bool later = false);
+		               bool later = false, const Units *units = 0);
 		/** The time is @p t (unix time) from now on, 0: the clock (tests). */
 		static void setClock(long t);
 

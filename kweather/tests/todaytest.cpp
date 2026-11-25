@@ -564,6 +564,32 @@ int main(int argc, char **argv)
                    "5", "Light rain", hybrid);
     }
 
+    // the hybrid model in two units (the units changed between the
+    // downloads): ICON-EU (Fahrenheit) has no hours left, ECMWF
+    // (Celsius) has them: from ECMWF, in its units
+    {
+        WeatherLib h;
+        Answer icon, ecmwf;
+        t = winter(ecmwf, 20, 30, 2.4, 0, 0);
+        WeatherLib::setClock(t);
+        winter(icon, 20, 30, 36.3, 0, 0);
+        while (icon.rows.count() > 19)
+            icon.rows.remove(icon.rows.fromLast());
+        for (int i = 0; i < 19; ++i)
+            icon.rows[i].temp = 40;
+        WeatherLib::Units f;
+        f.temperature = "fahrenheit";
+        f.wind = "kmh";
+        f.precipitation = "mm";
+        if (!h.setAnswer(hybrid, json(icon), false, &f))
+            check("hybrid-units", "answer", "no", "yes");
+        give(h, "hybrid-units", ecmwf, hybrid, true);
+        checkToday(h, "hybrid-units", "2026-11-25", "weather-clear-night", "4.5", "1.0", "0.00",
+                   "5", "Clear sky", hybrid);
+        check("hybrid-units", "unit", field(h.dailyValues(hybrid)[0], 7),
+              QString::fromUtf8("\xc2\xb0""C"));
+    }
+
     // the end of summer time: 2026-10-25 has 25 hours in Bucharest; at
     // 01:30 EEST 24 of them are still to come (0.1 mm each)
     {

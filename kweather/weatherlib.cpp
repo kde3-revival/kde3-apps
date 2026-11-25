@@ -434,8 +434,13 @@ bool restOfToday(const WeatherLib::Data *d, long t, RestOfDay *r)
     // (only in the same units)
     QMap<long, const Hour*> hours;
     QMap<long, int> source;
+    // in other units only if the first model has no hours left
+    bool firstLeft = false;
+    QValueList<Hour>::ConstIterator f = d->hours.begin();
+    for (; f != d->hours.end() && !firstLeft; ++f)
+        firstLeft = (*f).time > t;
     bool later = !d->laterHours.isEmpty()
-                 && (d->hours.isEmpty() || sameUnits(d->hourUnits, d->laterUnits));
+                 && (!firstLeft || sameUnits(d->hourUnits, d->laterUnits));
     for (int part = 0; part < 2; ++part) {
         if (part == 1 && !later)
             break;
@@ -699,7 +704,8 @@ void WeatherLib::setClock(long t)
 	clockOverride = t;
 }
 
-bool WeatherLib::setAnswer(const QString &id, const QByteArray &answer, bool later)
+bool WeatherLib::setAnswer(const QString &id, const QByteArray &answer, bool later,
+                           const Units *units)
 {
 	Data *d = m_data[id];
 	if (!d) {
@@ -712,7 +718,7 @@ bool WeatherLib::setAnswer(const QString &id, const QByteArray &answer, bool lat
 	r.current = !later;
 	r.hourly = r.daily = true;
 	r.later = later;
-	r.units = m_units;
+	r.units = units ? *units : m_units;
 	d->error = takeAnswer(d, r, answer);
 	if (d->error.isEmpty())
 		d->fetched = QDateTime::currentDateTime();
