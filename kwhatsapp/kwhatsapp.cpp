@@ -113,6 +113,13 @@ KWhatsApp::KWhatsApp( const KURL& url )
          << QString::fromLatin1( "sites=" ) + url.host();
     if ( !userAgent.isEmpty() )
         args << QString::fromLatin1( "userAgent=" ) + userAgent;
+    // WhatsApp's notifications are what KWhatsApp is for: allowed from
+    // the start (unless denied before), so WhatsApp does not start with
+    // its own message notifications switched off waiting for the user.
+    QString origin = url.protocol() + "://" + url.host();
+    if ( url.port() )
+        origin += ":" + QString::number( url.port() );
+    args << QString::fromLatin1( "notifications=" ) + origin;
     // The senders' pictures: WhatsApp's own CDN (its CSP's img-src lists
     // https://*.whatsapp.net; profile pictures come from pps.whatsapp.net,
     // which allows CORS).  [General] PictureOrigins replaces it.
