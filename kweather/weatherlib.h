@@ -89,12 +89,17 @@ class WeatherLib : public QObject
 		QStringList stations();
 
 		/**
-		 * Takes @p answer, a complete answer of Open-Meteo (current,
-		 * hourly and daily) for the location @p id, as if it had been
-		 * downloaded: canned data, e.g. for tests.  False if it is no
-		 * good (see error()).
+		 * Takes @p answer, an answer of Open-Meteo for the location
+		 * @p id, as if it had been downloaded: canned data, e.g. for
+		 * tests.  Current, hourly and daily, or with @p later hourly
+		 * and daily of the second model of the hybrid one (ECMWF).
+		 * False if it is no good (see error()); the data from before
+		 * stays then.
 		 */
-		bool setAnswer(const QString &id, const QByteArray &answer);
+		bool setAnswer(const QString &id, const QByteArray &answer,
+		               bool later = false);
+		/** The time is @p t (unix time) from now on, 0: the clock (tests). */
+		static void setClock(long t);
 
 		void update(const QString &id);
 		void forceUpdate(const QString &id);

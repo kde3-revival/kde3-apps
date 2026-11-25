@@ -72,6 +72,13 @@ long timeOf(const QVariant &v)
     return valid(d) ? static_cast<long>(d) : 0;
 }
 
+/** is_day: 1, 0, or -1 if missing or out of range. */
+int lightOf(const QVariant &v)
+{
+    double d = number(v, 0, 1);
+    return valid(d) ? (d != 0 ? 1 : 0) : -1;
+}
+
 /** A WMO weather code, -1 if missing or out of range. */
 int codeOf(const QVariant &v)
 {
@@ -97,7 +104,8 @@ struct Current
     double precip;
     double cloudCover;
     int code;
-    bool day;
+    bool day;           // unknown: true
+    int light;          // is_day: 1, 0, -1 unknown
 };
 
 struct Hour
@@ -109,7 +117,8 @@ struct Hour
     double windSpeed;
     double windDirection;   // where it comes from, degrees
     int code;
-    bool day;
+    bool day;           // unknown: true
+    int light;          // is_day: 1, 0, -1 unknown
 };
 
 struct Day
@@ -156,7 +165,8 @@ bool parseCurrent(const QVariant &root, Current *c)
     c->precip = number(Json::member(cur, "precipitation"), 0, precipHi);
     c->cloudCover = number(Json::member(cur, "cloud_cover"), 0, 100);
     c->code = codeOf(Json::member(cur, "weather_code"));
-    c->day = number(Json::member(cur, "is_day"), 0, 1) != 0;
+    c->light = lightOf(Json::member(cur, "is_day"));
+    c->day = c->light != 0;
     return true;
 }
 
@@ -177,23 +187,28 @@ bool parseHours(const QVariant &root, QValueList<Hour> *hours)
     QValueList<QVariant> windDirection = array(hourly, "wind_direction_10m");
     hours->clear();
     long last = 0;
+    bool any = false;
     for (uint i = 0; i < time.count(); ++i) {
         Hour h;
         h.time = timeOf(time[i]);
         h.temp = number(temp[i], tLo, tHi);
-        // ICON-EU ends after 5 days: null temperatures
-        if (h.time <= last || !valid(h.temp))
+        if (h.time <= last)
             continue;
+        // ICON-EU ends after 5 days: null temperatures.  Such hours are
+        // kept for their other values (see restOfToday()); the lists of
+        // hours skip them.
+        any = any || valid(h.temp);
         last = h.time;
         h.precip = number(at(precip, i), 0, precipHi);
         h.prob = number(at(prob, i), 0, 100);
         h.code = codeOf(at(code, i));
-        h.day = number(at(day, i), 0, 1) != 0;
+        h.light = lightOf(at(day, i));
+        h.day = h.light != 0;
         h.windSpeed = number(at(windSpeed, i), 0, windHi);
         h.windDirection = number(at(windDirection, i), 0, 360);
         hours->append(h);
     }
-    return !hours->isEmpty();
+    return any;
 }
 
 bool parseDays(const QVariant &root, QValueList<Day> *days)
@@ -231,8 +246,12 @@ bool parseDays(const QVariant &root, QValueList<Day> *days)
     return !days->isEmpty();
 }
 
+long clockOverride = 0;
+
 long now()
 {
+    if (clockOverride)
+        return clockOverride;
     return static_cast<long>(QDateTime::currentDateTime().toTime_t());
 }
 
@@ -369,72 +388,131 @@ int dryCode(int code)
     return code;
 }
 
+bool sameUnits(const WeatherLib::Units &a, const WeatherLib::Units &b)
+{
+    return a.temperature == b.temperature && a.precipitation == b.precipitation;
+}
+
+/** Whether the sun is up at some time in [@p from, @p to]: 1, 0, or -1
+    if the sunrises and sunsets do not tell (none, polar day or night). */
+int sunUp(const WeatherLib::Data *d, long from, long to)
+{
+    QDate first = d->local(from).date(), last = d->local(to).date();
+    int known = 0;
+    QValueList<Day>::ConstIterator it = d->days.begin();
+    for (; it != d->days.end(); ++it) {
+        const Day &dy = *it;
+        QDate date = d->local(dy.time + 12 * 3600).date();
+        if (date < first || date > last)
+            continue;
+        if (!dy.sunrise || !dy.sunset)
+            return -1;
+        if (dy.sunrise <= to && dy.sunset >= from)
+            return 1;
+        ++known;
+    }
+    return known == first.daysTo(last) + 1 ? 0 : -1;
+}
+
 /**
  * The rest of today at the location, from the hours of the forecast
- * (that of the hour in progress on): the highest and the lowest
- * temperature (with the current one), the precipitation still to come,
- * the most significant weather (the highest WMO code, as Open-Meteo
- * makes the code of a day) and no precipitation in it when none is to
+ * (that of the hour in progress on, at least minRestHours): the highest
+ * and the lowest temperature (with the current one), the precipitation
+ * still to come (unknown if an hour lacks its amount), the most
+ * significant weather (the highest WMO code, as Open-Meteo makes the code
+ * of a day), without precipitation when less than the card shows is to
  * come.  The night icon when the sun is down now and does not rise
- * again today, as the current weather shows it then.  False if there
- * are no hours for today.
+ * again in these hours: by the sunrises and sunsets, else by is_day of
+ * now and of the hours.  With the hybrid model the hours of ICON-EU,
+ * those of ECMWF where ICON-EU has none (after its end, or no
+ * temperature), as dayHours() takes them.  False if there are no hours
+ * for today.
  */
 bool restOfToday(const WeatherLib::Data *d, long t, RestOfDay *r)
 {
-    // the hours of ICON-EU for the hybrid model, those of ECMWF only if
-    // it has none (it starts with today)
-    const QValueList<Hour> *source = &d->hours;
-    r->units = &d->hourUnits;
-    if (source->isEmpty()) {
-        source = &d->laterHours;
-        r->units = &d->laterUnits;
-    }
-    QDate today = d->local(t).date();
-    QValueList<Hour> rest;
-    QValueList<Hour>::ConstIterator it = source->begin();
-    for (; it != source->end(); ++it) {
-        const Hour &h = *it;
-        if (h.time <= t)
-            continue;
-        // the hour (time - 1 h, time]: today if it starts today
-        if (d->local(h.time - 1).date() != today && int(rest.count()) >= minRestHours)
+    // the hours by time: the first model, the second where it lacks them
+    // (only in the same units)
+    QMap<long, const Hour*> hours;
+    QMap<long, int> source;
+    bool later = !d->laterHours.isEmpty()
+                 && (d->hours.isEmpty() || sameUnits(d->hourUnits, d->laterUnits));
+    for (int part = 0; part < 2; ++part) {
+        if (part == 1 && !later)
             break;
-        rest.append(h);
+        const QValueList<Hour> &list = part == 0 ? d->hours : d->laterHours;
+        QValueList<Hour>::ConstIterator it = list.begin();
+        for (; it != list.end(); ++it) {
+            const Hour &h = *it;
+            if (h.time <= t)
+                continue;
+            QMap<long, const Hour*>::Iterator have = hours.find(h.time);
+            if (have == hours.end() || (!valid((*have)->temp) && valid(h.temp))) {
+                hours[h.time] = &h;
+                source[h.time] = part;
+            }
+        }
     }
-    if (rest.isEmpty() || d->local(rest.first().time - 1).date() != today)
+
+    QDate today = d->local(t).date();
+    QValueList<const Hour*> rest;
+    bool fromFirst = false;
+    QMap<long, const Hour*>::ConstIterator it = hours.begin();
+    for (; it != hours.end(); ++it) {
+        // the hour (time - 1 h, time]: today if it starts today
+        if (d->local(it.key() - 1).date() != today && int(rest.count()) >= minRestHours)
+            break;
+        rest.append(*it);
+        fromFirst = fromFirst || source[it.key()] == 0;
+    }
+    if (rest.isEmpty() || d->local(rest.first()->time - 1).date() != today)
         return false;
+    r->units = fromFirst || !later ? &d->hourUnits : &d->laterUnits;
+
+    // all of the hours, each an hour after the one before: else the
+    // precipitation is unknown
+    bool complete = rest.first()->time <= t + 3600;
+    long previous = rest.first()->time - 3600;
+    QValueList<const Hour*>::ConstIterator h = rest.begin();
+    for (; h != rest.end(); ++h) {
+        complete = complete && (*h)->time - previous == 3600;
+        previous = (*h)->time;
+    }
+    // ... and up to midnight
+    complete = complete && d->local(previous).date() != today;
 
     r->tmax = r->tmin = noValue;
     if (d->hasCurrent && d->currentUnits.temperature == r->units->temperature)
         r->tmax = r->tmin = d->current.temp;
-    r->precip = 0;
+    r->precip = complete ? 0 : noValue;
     r->prob = noValue;
     r->code = -1;
-    r->day = d->hasCurrent && d->current.day;
     int wet = -1;
-    for (it = rest.begin(); it != rest.end(); ++it) {
-        const Hour &h = *it;
-        if (!valid(r->tmax) || h.temp > r->tmax)
-            r->tmax = h.temp;
-        if (!valid(r->tmin) || h.temp < r->tmin)
-            r->tmin = h.temp;
-        if (!valid(h.precip))
+    int light = d->hasCurrent ? d->current.light : -1;
+    for (h = rest.begin(); h != rest.end(); ++h) {
+        const Hour &hr = **h;
+        if (valid(hr.temp) && (!valid(r->tmax) || hr.temp > r->tmax))
+            r->tmax = hr.temp;
+        if (valid(hr.temp) && (!valid(r->tmin) || hr.temp < r->tmin))
+            r->tmin = hr.temp;
+        if (!valid(hr.precip))
             r->precip = noValue;    // unknown is not dry
         else if (valid(r->precip))
-            r->precip += h.precip;
-        if (valid(h.prob) && (!valid(r->prob) || h.prob > r->prob))
-            r->prob = h.prob;
-        if (h.code > wet)
-            wet = h.code;
-        if (h.code >= 0 && dryCode(h.code) > r->code)
-            r->code = dryCode(h.code);
-        if (h.day)
-            r->day = true;
+            r->precip += hr.precip;
+        if (valid(hr.prob) && (!valid(r->prob) || hr.prob > r->prob))
+            r->prob = hr.prob;
+        if (hr.code > wet)
+            wet = hr.code;
+        if (hr.code >= 0 && dryCode(hr.code) > r->code)
+            r->code = dryCode(hr.code);
+        if (hr.light == 1 || (hr.light == 0 && light == -1))
+            light = hr.light;
     }
     // the weather with precipitation only when an amount is to come
     // that the card shows (see shownPrecipitation())
     if (!valid(r->precip) || millimeters(r->precip, *r->units) >= 0.05)
         r->code = wet;
+    int sun = sunUp(d, t, previous);
+    r->day = sun != -1 ? sun == 1 : light != 0;     // unknown: the day icon
     return true;
 }
 
@@ -616,7 +694,12 @@ QString WeatherLib::takeAnswer(Data *d, const Request &r, const QByteArray &answ
 	return QString::null;
 }
 
-bool WeatherLib::setAnswer(const QString &id, const QByteArray &answer)
+void WeatherLib::setClock(long t)
+{
+	clockOverride = t;
+}
+
+bool WeatherLib::setAnswer(const QString &id, const QByteArray &answer, bool later)
 {
 	Data *d = m_data[id];
 	if (!d) {
@@ -626,8 +709,9 @@ bool WeatherLib::setAnswer(const QString &id, const QByteArray &answer)
 	}
 	Request r;
 	r.id = id;
-	r.current = r.hourly = r.daily = true;
-	r.later = false;
+	r.current = !later;
+	r.hourly = r.daily = true;
+	r.later = later;
 	r.units = m_units;
 	d->error = takeAnswer(d, r, answer);
 	if (d->error.isEmpty())
@@ -838,7 +922,7 @@ QStringList WeatherLib::hourly(const QString &id, int hours)
 	QValueList<Hour>::ConstIterator it = d->hours.begin();
 	for (; it != d->hours.end() && int(list.count()) < hours; ++it) {
 		const Hour &h = *it;
-		if (h.time <= t)
+		if (h.time <= t || !valid(h.temp))
 			continue;
 		list.append(d->local(h.time).toString(Qt::ISODate) + '\t'
 		            + WeatherIcons::iconName(h.code, h.day) + '\t'
@@ -916,7 +1000,7 @@ QStringList WeatherLib::hourlyValues(const QString &id, int hours)
 	QValueList<Hour>::ConstIterator it = d->hours.begin();
 	for (; it != d->hours.end() && int(list.count()) < hours; ++it) {
 		const Hour &h = *it;
-		if (h.time <= t)
+		if (h.time <= t || !valid(h.temp))
 			continue;
 		list.append(d->local(h.time).toString(Qt::ISODate) + '\t'
 		            + WeatherIcons::iconName(h.code, h.day) + '\t'
@@ -999,8 +1083,9 @@ QStringList WeatherLib::dayHours(const QString &id, const QString &date)
 		QValueList<Hour>::ConstIterator it = source.begin();
 		for (; it != source.end(); ++it) {
 			const Hour &h = *it;
-			if (next24 ? (h.time <= t || h.time > t + 24 * 3600)
-			           : d->local(h.time).date() != wanted)
+			if (!valid(h.temp)
+			    || (next24 ? (h.time <= t || h.time > t + 24 * 3600)
+			               : d->local(h.time).date() != wanted))
 				continue;
 			hours[h.time] = &h;     // the model of the first part wins
 			units[h.time] = u;
@@ -1041,7 +1126,7 @@ QString WeatherLib::rainNextHour(const QString &id)
 	QValueList<Hour>::ConstIterator it = d->hours.begin();
 	for (; it != d->hours.end(); ++it) {
 		const Hour &h = *it;
-		if (h.time <= t)
+		if (h.time <= t || !valid(h.temp))
 			continue;
 		if (h.time >= t + 2 * 3600)
 			break;
