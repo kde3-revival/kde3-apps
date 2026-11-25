@@ -88,6 +88,19 @@ class WeatherLib : public QObject
 
 		QStringList stations();
 
+		/**
+		 * Takes @p answer, an answer of Open-Meteo for the location
+		 * @p id, as if it had been downloaded: canned data, e.g. for
+		 * tests.  Current, hourly and daily, or with @p later hourly
+		 * and daily of the second model of the hybrid one (ECMWF).
+		 * False if it is no good (see error()); the data from before
+		 * stays then.  In @p units, by default those of setUnits().
+		 */
+		bool setAnswer(const QString &id, const QByteArray &answer,
+		               bool later = false, const Units *units = 0);
+		/** The time is @p t (unix time) from now on, 0: the clock (tests). */
+		static void setClock(long t);
+
 		void update(const QString &id);
 		void forceUpdate(const QString &id);
 		void remove(const QString &id);
@@ -113,6 +126,8 @@ class WeatherLib : public QObject
 		};
 
 		Data* findData(const QString &id);
+		Data* newData(const QString &id);
+		QString takeAnswer(Data *d, const Request &r, const QByteArray &answer);
 		void getData(Data *d, bool force = false);
 		void startJob(Data *d, const QString &model, bool current,
 		              bool hourly, bool daily, bool later = false);

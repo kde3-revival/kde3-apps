@@ -114,6 +114,22 @@ class WeatherService : public QObject, public DCOPObject
 		/**
 		 * Today and the next 6 days: "<date, ISO 8601>\t<icon>\t<maximum>
 		 * \t<minimum>\t<precipitation>\t<probability>\t<description>".
+		 *
+		 * Today is the rest of today at the location, from the hourly
+		 * forecast: the hours from the one in progress to midnight, at
+		 * least 3 (late in the evening the first hours after midnight
+		 * complete them).  Its maximum and minimum are those of these
+		 * hours and of the current temperature, its precipitation is
+		 * what is still to come (unknown if an hour lacks its amount or
+		 * the forecast ends before midnight), its weather the most
+		 * significant of the hours (the highest WMO code), without
+		 * precipitation (the clouds of the code instead) when less than
+		 * 0.05 mm is to come, and its icon the night one when the sun is
+		 * down now and does not rise again in these hours (by the
+		 * sunrises and sunsets, else by is_day of now and of the hours;
+		 * the day one if nothing tells).  With the hybrid model, the
+		 * hours of ICON-EU, those of ECMWF where it has none.  The whole
+		 * day only when there are no hours for today.
 		 */
 		QStringList dailyForecast(const QString &stationID);
 		/**
