@@ -55,10 +55,10 @@ public:
     void showOnCurrentDesktop();
     /** The tray's click: show (see above), or hide if it is in front. */
     void toggleFromTray();
-    /** Started hidden (--hidden, a session left hidden): the window stays
-        hidden if the tray icon gets into a system tray within 15 seconds
-        (the panel may come up after KWhatsApp), else it is shown: no
-        KWhatsApp running unseen without a system tray. */
+    /** Started hidden (--hidden, a session left hidden): if the tray icon
+        is not in a system tray 15 seconds later (the panel may come up
+        after KWhatsApp) and the window was not shown or hidden meanwhile,
+        it is shown: no KWhatsApp running unseen without a system tray. */
     void startHidden();
 
     /** Whether KWhatsApp is started at login: Autostart in [General] of
@@ -85,6 +85,7 @@ signals:
 protected:
     virtual bool queryClose();
     virtual bool queryExit();
+    virtual void showEvent( QShowEvent* e );
     virtual void hideEvent( QHideEvent* e );
     virtual void windowActivationChange( bool oldActive );
 
@@ -146,7 +147,6 @@ private:
     bool m_closeToTray;
     int m_balloonTimeout;   // seconds, 0: none
     QTimer* m_dockTimer;
-    int m_dockChecks;
 };
 
 /** The system tray icon: the application's icon, the unread count on it. */

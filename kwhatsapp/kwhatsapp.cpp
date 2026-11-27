@@ -99,7 +99,7 @@ private:
 KWhatsApp::KWhatsApp( const KURL& url )
     : KParts::MainWindow( 0, "kwhatsapp-mainwindow" ), m_shown( 0 ), m_part( 0 ), m_statusLabel( 0 ), m_tray( 0 ), m_showMenubar( 0 ), m_unread( 0 ),
       m_quitting( false ), m_notify( true ), m_notifyContent( true ), m_closeToTray( true ), m_balloonTimeout( 30 ),
-      m_dockTimer( 0 ), m_dockChecks( 0 )
+      m_dockTimer( 0 )
 {
     readSettings();
 
@@ -713,6 +713,8 @@ bool KWhatsApp::queryExit()
 
 void KWhatsApp::hideEvent( QHideEvent* e )
 {
+    if ( m_dockTimer )
+        m_dockTimer->stop();
     // Hidden in the tray: where it was (shown there again).
     if ( !isMinimized() )
         savePosition();
@@ -762,21 +764,22 @@ void KWhatsApp::startHidden()
         m_dockTimer = new QTimer( this, "kwhatsapp-docktimer" );
         connect( m_dockTimer, SIGNAL( timeout() ), SLOT( slotCheckDocked() ) );
     }
-    m_dockChecks = 0;
-    m_dockTimer->start( 500 );
+    m_dockTimer->start( 15000, true );
 }
 
+// Decided at the end of the wait: the window shown or hidden before (the
+// icon, kwhatsapp started again) stopped it (showEvent(), hideEvent()).
 void KWhatsApp::slotCheckDocked()
 {
-    // docked, or the window shown meanwhile: nothing to do
-    if ( isVisible() || !m_tray || m_tray->isDocked() ) {
+    if ( !m_tray || !m_tray->isDocked() )
+        showOnCurrentDesktop();
+}
+
+void KWhatsApp::showEvent( QShowEvent* e )
+{
+    if ( m_dockTimer )
         m_dockTimer->stop();
-        return;
-    }
-    if ( ++m_dockChecks < 30 )
-        return;
-    m_dockTimer->stop();
-    showOnCurrentDesktop();
+    KParts::MainWindow::showEvent( e );
 }
 
 bool KWhatsApp::startAtLogin()
