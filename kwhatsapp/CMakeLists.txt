@@ -15,4 +15,6 @@ kde3_add_executable(kwhatsapp
 kde3_install_icons(kwhatsapp)
 
 install(FILES kwhatsapp.desktop DESTINATION ${KDE3_XDG_APPS_INSTALL_DIR})
+install(FILES kwhatsapp-autostart.desktop DESTINATION ${KDE3_AUTOSTART_INSTALL_DIR}
+        RENAME kwhatsapp.desktop)
 install(FILES kwhatsappui.rc eventsrc DESTINATION ${KDE3_DATA_INSTALL_DIR}/kwhatsapp)

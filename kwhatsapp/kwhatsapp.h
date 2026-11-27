@@ -22,6 +22,7 @@
 #include <kurl.h>
 
 class QCheckBox;
+class QTimer;
 class KLineEdit;
 class KToggleAction;
 namespace KParts { class ReadOnlyPart; class URLArgs; }
@@ -54,6 +55,19 @@ public:
     void showOnCurrentDesktop();
     /** The tray's click: show (see above), or hide if it is in front. */
     void toggleFromTray();
+    /** Started hidden (--hidden, a session left hidden): if the tray icon
+        is not in a system tray 15 seconds later (the panel may come up
+        after KWhatsApp) and the window was not shown or hidden meanwhile,
+        it is shown: no KWhatsApp running unseen without a system tray. */
+    void startHidden();
+
+    /** Whether KWhatsApp is started at login: Autostart in [General] of
+        kwhatsapprc, the condition of its autostart entry. Off when not set;
+        the first start turns it on (initStartAtLogin()). */
+    static bool startAtLogin();
+    static void setStartAtLogin( bool start );
+    /** Turns starting at login on if the user did not choose yet. */
+    static void initStartAtLogin();
 
     /** The unread chats the page title shows (0: none). */
     int unreadCount() const { return m_unread; }
@@ -71,10 +85,12 @@ signals:
 protected:
     virtual bool queryClose();
     virtual bool queryExit();
+    virtual void showEvent( QShowEvent* e );
     virtual void hideEvent( QHideEvent* e );
     virtual void windowActivationChange( bool oldActive );
 
 private slots:
+    void slotCheckDocked();
     void slotTitleChanged( const QString& title );
     void slotNotification( int id, const QString& title, const QString& body, const QImage& icon );
     void slotNotificationClosed( int id );
@@ -130,6 +146,7 @@ private:
     bool m_notifyContent;
     bool m_closeToTray;
     int m_balloonTimeout;   // seconds, 0: none
+    QTimer* m_dockTimer;
 };
 
 /** The system tray icon: the application's icon, the unread count on it. */
@@ -151,12 +168,14 @@ protected:
 
 private slots:
     void slotRestore();
+    void slotToggleAutostart();
 
 private:
     void updateIcon();
 
     KWhatsApp* m_window;
     int m_unread;
+    int m_autostartId;
 };
 
 /** Settings, Configure kwhatsapp. */
@@ -184,6 +203,8 @@ private:
     QCheckBox* m_notify;
     QCheckBox* m_notifyContent;
     QCheckBox* m_closeToTray;
+    QCheckBox* m_autostart;
+    bool m_autostartLoaded;   // the setting when read or saved
     KLineEdit* m_userAgent;
 };
 

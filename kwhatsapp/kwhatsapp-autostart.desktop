@@ -1,0 +1,16 @@
+# The autostart entry of KWhatsApp, installed as share/autostart/kwhatsapp.desktop.
+# Off unless kwhatsapprc says Autostart=true in [General]: the first start
+# of KWhatsApp writes that, "Start KWhatsApp at Login" in the context menu
+# of the tray icon (or Settings > Configure KWhatsApp) changes it.
+[Desktop Entry]
+Type=Application
+Name=KWhatsApp
+GenericName=WhatsApp Web
+Exec=kwhatsapp --hidden
+Icon=kwhatsapp
+Terminal=false
+X-KDE-StartupNotify=false
+X-KDE-autostart-after=panel
+X-KDE-autostart-condition=kwhatsapprc:General:Autostart:false
+NoDisplay=true
+OnlyShowIn=KDE;
