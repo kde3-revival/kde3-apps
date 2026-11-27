@@ -49,6 +49,8 @@ public:
                 ::exit( 1 );
             }
             setMainWidget( m_window );
+            // Started at login from the first start on, until turned off.
+            KWhatsApp::initStartAtLogin();
             // A session restored as it was left: hidden if it was.
             bool hidden = args->isSet( "hidden" );
             if ( isRestored() ) {
@@ -60,8 +62,11 @@ public:
             args->clear();
             return 0;
         }
-        // Started again (the K menu, a second launch): the window comes.
-        m_window->showOnCurrentDesktop();
+        // Started again (the K menu, a second launch): the window comes;
+        // not for --hidden (the autostart entry, after a session restore
+        // brought KWhatsApp back): the window stays as it is.
+        if ( !args->isSet( "hidden" ) )
+            m_window->showOnCurrentDesktop();
         KStartupInfo::appStarted();
         args->clear();
         return 0;

@@ -55,6 +55,14 @@ public:
     /** The tray's click: show (see above), or hide if it is in front. */
     void toggleFromTray();
 
+    /** Whether KWhatsApp is started at login: Autostart in [General] of
+        kwhatsapprc, the condition of its autostart entry. Off when not set;
+        the first start turns it on (initStartAtLogin()). */
+    static bool startAtLogin();
+    static void setStartAtLogin( bool start );
+    /** Turns starting at login on if the user did not choose yet. */
+    static void initStartAtLogin();
+
     /** The unread chats the page title shows (0: none). */
     int unreadCount() const { return m_unread; }
 
@@ -151,12 +159,14 @@ protected:
 
 private slots:
     void slotRestore();
+    void slotToggleAutostart();
 
 private:
     void updateIcon();
 
     KWhatsApp* m_window;
     int m_unread;
+    int m_autostartId;
 };
 
 /** Settings, Configure kwhatsapp. */
@@ -184,6 +194,7 @@ private:
     QCheckBox* m_notify;
     QCheckBox* m_notifyContent;
     QCheckBox* m_closeToTray;
+    QCheckBox* m_autostart;
     KLineEdit* m_userAgent;
 };
 
