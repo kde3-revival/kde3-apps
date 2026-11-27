@@ -59,6 +59,8 @@ public:
             }
             if ( !hidden )
                 m_window->show();
+            else
+                m_window->startHidden();
             args->clear();
             return 0;
         }

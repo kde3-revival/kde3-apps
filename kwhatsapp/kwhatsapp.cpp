@@ -98,7 +98,8 @@ private:
 
 KWhatsApp::KWhatsApp( const KURL& url )
     : KParts::MainWindow( 0, "kwhatsapp-mainwindow" ), m_shown( 0 ), m_part( 0 ), m_statusLabel( 0 ), m_tray( 0 ), m_showMenubar( 0 ), m_unread( 0 ),
-      m_quitting( false ), m_notify( true ), m_notifyContent( true ), m_closeToTray( true ), m_balloonTimeout( 30 )
+      m_quitting( false ), m_notify( true ), m_notifyContent( true ), m_closeToTray( true ), m_balloonTimeout( 30 ),
+      m_dockTimer( 0 ), m_dockChecks( 0 )
 {
     readSettings();
 
@@ -755,6 +756,29 @@ void KWhatsApp::slotConfigureNotifications()
     KNotifyDialog::configure( this );
 }
 
+void KWhatsApp::startHidden()
+{
+    if ( !m_dockTimer ) {
+        m_dockTimer = new QTimer( this, "kwhatsapp-docktimer" );
+        connect( m_dockTimer, SIGNAL( timeout() ), SLOT( slotCheckDocked() ) );
+    }
+    m_dockChecks = 0;
+    m_dockTimer->start( 500 );
+}
+
+void KWhatsApp::slotCheckDocked()
+{
+    // docked, or the window shown meanwhile: nothing to do
+    if ( isVisible() || !m_tray || m_tray->isDocked() ) {
+        m_dockTimer->stop();
+        return;
+    }
+    if ( ++m_dockChecks < 30 )
+        return;
+    m_dockTimer->stop();
+    showOnCurrentDesktop();
+}
+
 bool KWhatsApp::startAtLogin()
 {
     KConfigGroup general( kapp->config(), "General" );
@@ -944,7 +968,8 @@ KWhatsAppConfigDialog::KWhatsAppConfigDialog( QWidget* parent )
     m_notify->setChecked( general.readBoolEntry( "Notifications", true ) );
     m_notifyContent->setChecked( general.readBoolEntry( "NotificationContent", true ) );
     m_closeToTray->setChecked( general.readBoolEntry( "CloseToTray", true ) );
-    m_autostart->setChecked( KWhatsApp::startAtLogin() );
+    m_autostartLoaded = KWhatsApp::startAtLogin();
+    m_autostart->setChecked( m_autostartLoaded );
     m_userAgent->setText( general.readEntry( "UserAgent" ) );
     updateEnabled();
 }
@@ -962,8 +987,12 @@ void KWhatsAppConfigDialog::save()
     general.writeEntry( "CloseToTray", m_closeToTray->isChecked() );
     general.writeEntry( "UserAgent", m_userAgent->text().stripWhiteSpace() );
     general.sync();
-    if ( m_autostart->isChecked() != KWhatsApp::startAtLogin() )
-        KWhatsApp::setStartAtLogin( m_autostart->isChecked() );
+    // only a change made here: the tray icon's menu may have changed the
+    // setting since the dialog read it
+    if ( m_autostart->isChecked() != m_autostartLoaded ) {
+        m_autostartLoaded = m_autostart->isChecked();
+        KWhatsApp::setStartAtLogin( m_autostartLoaded );
+    }
     emit settingsChanged();
 }
 

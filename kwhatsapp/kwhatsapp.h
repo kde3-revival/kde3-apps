@@ -22,6 +22,7 @@
 #include <kurl.h>
 
 class QCheckBox;
+class QTimer;
 class KLineEdit;
 class KToggleAction;
 namespace KParts { class ReadOnlyPart; class URLArgs; }
@@ -54,6 +55,11 @@ public:
     void showOnCurrentDesktop();
     /** The tray's click: show (see above), or hide if it is in front. */
     void toggleFromTray();
+    /** Started hidden (--hidden, a session left hidden): the window stays
+        hidden if the tray icon gets into a system tray within 15 seconds
+        (the panel may come up after KWhatsApp), else it is shown: no
+        KWhatsApp running unseen without a system tray. */
+    void startHidden();
 
     /** Whether KWhatsApp is started at login: Autostart in [General] of
         kwhatsapprc, the condition of its autostart entry. Off when not set;
@@ -83,6 +89,7 @@ protected:
     virtual void windowActivationChange( bool oldActive );
 
 private slots:
+    void slotCheckDocked();
     void slotTitleChanged( const QString& title );
     void slotNotification( int id, const QString& title, const QString& body, const QImage& icon );
     void slotNotificationClosed( int id );
@@ -138,6 +145,8 @@ private:
     bool m_notifyContent;
     bool m_closeToTray;
     int m_balloonTimeout;   // seconds, 0: none
+    QTimer* m_dockTimer;
+    int m_dockChecks;
 };
 
 /** The system tray icon: the application's icon, the unread count on it. */
@@ -195,6 +204,7 @@ private:
     QCheckBox* m_notifyContent;
     QCheckBox* m_closeToTray;
     QCheckBox* m_autostart;
+    bool m_autostartLoaded;   // the setting when read or saved
     KLineEdit* m_userAgent;
 };
 
